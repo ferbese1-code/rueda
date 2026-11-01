@@ -1,0 +1,189 @@
+<div id="toasts" aria-live="polite"></div>
+
+<!-- ============ INICIO ============ -->
+<main id="home" class="screen">
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">
+        <svg class="mark" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="19" fill="none" stroke="currentColor" stroke-width="4"/><circle cx="24" cy="24" r="4" fill="currentColor"/><path d="M24 5v38M5 24h38M10.6 10.6l26.8 26.8M37.4 10.6 10.6 37.4" stroke="currentColor" stroke-width="1.6" opacity=".55"/></svg>
+        <div><h1>Rueda</h1><p class="sub">Rodillo virtual</p></div>
+      </div>
+      <nav class="topnav">
+        <button class="ghost" id="btnHistory" type="button">Historial</button>
+        <button class="ghost" id="btnSettings" type="button">Ajustes</button>
+      </nav>
+    </header>
+
+    <div id="recover" class="notice" hidden></div>
+    <div id="bleNotice" class="notice warn" hidden>
+      <b>Este navegador no tiene Bluetooth.</b> En iPhone abre esta página con <b>Bluefy</b> (gratis en la App Store); en Android, con <b>Chrome</b>. Mientras tanto puedes probarla en modo prueba.
+    </div>
+
+    <section class="block">
+      <h2 class="label">Sensores</h2>
+      <div class="devices">
+        <div class="dev" id="dev-trainer"><span class="dot"></span><div class="dmeta"><b>Rodillo</b><span class="dstate">Sin conectar</span></div><button type="button" class="dbtn" data-dev="trainer">Conectar</button></div>
+        <div class="dev" id="dev-hrm"><span class="dot"></span><div class="dmeta"><b>Pulsómetro</b><span class="dstate">Opcional</span></div><button type="button" class="dbtn" data-dev="hrm">Conectar</button></div>
+        <div class="dev" id="dev-pm"><span class="dot"></span><div class="dmeta"><b>Potenciómetro</b><span class="dstate">Opcional (pedales)</span></div><button type="button" class="dbtn" data-dev="pm">Conectar</button></div>
+      </div>
+      <label class="switch"><input type="checkbox" id="demoMode"><span></span>Modo prueba (simula el rodillo)</label>
+    </section>
+
+    <section class="block">
+      <div class="seg" role="tablist">
+        <button type="button" role="tab" id="tabWorkout" class="on">Entrenamiento</button>
+        <button type="button" role="tab" id="tabFree">Ruta libre</button>
+      </div>
+      <div id="workoutPick">
+        <div class="list" id="workoutList"></div>
+        <label class="ghost file"><input type="file" id="zwoInput" accept=".zwo,application/xml,text/xml" multiple>Importar .zwo</label>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2 class="label">Ruta</h2>
+      <div class="list routes" id="routeList"></div>
+    </section>
+    <div class="spacer"></div>
+  </div>
+  <div class="startbar">
+    <div class="startinfo" id="startInfo"></div>
+    <button type="button" class="primary" id="btnStart">Empezar</button>
+  </div>
+</main>
+
+<!-- ============ PEDALEANDO ============ -->
+<section id="ride" class="screen" hidden>
+  <canvas id="gl"></canvas>
+  <div class="hud">
+    <div class="plate pmain">
+      <div class="prow">
+        <div class="stat"><b id="hSpeed">0</b><i>km/h</i></div>
+        <div class="stat"><b id="hDist">0,0</b><i>km</i></div>
+        <div class="stat"><b id="hGain">0</b><i>m</i></div>
+        <div class="stat"><b id="hTime">0:00</b><i>tiempo</i></div>
+      </div>
+      <div class="pcore">
+        <div class="target" id="hTarget"><span class="tl">Pedalea a</span><span class="tw"><b id="hTargetW">—</b>W</span><span class="td" id="hTargetD"></span></div>
+        <div class="power"><b id="hPower">0</b><i>W</i></div>
+        <ul class="side">
+          <li><b id="hCad">0</b><i>rpm</i></li>
+          <li><b id="hAvg">0</b><i>W med</i></li>
+          <li><b id="hHr">—</b><i>ppm</i></li>
+          <li><b id="hKcal">0</b><i>kcal</i></li>
+        </ul>
+      </div>
+      <div class="stepbar"><div id="hStepFill"></div><span id="hStepLeft"></span></div>
+    </div>
+
+    <div class="plate pwork" id="hWork">
+      <div class="wtitle" id="hWorkName"></div>
+      <div class="wend">Termina en <b id="hWorkLeft">0:00</b></div>
+      <ol class="wsteps" id="hSteps"></ol>
+      <div class="wcount" id="hStepCount"></div>
+    </div>
+
+    <div class="pright">
+      <div class="plate pmap">
+        <canvas id="hMap" width="320" height="200"></canvas>
+        <div class="grade" id="hGrade">0 %</div>
+        <div class="rname" id="hRoute"></div>
+      </div>
+      <div class="plate pnear">
+        <div class="ntitle">Ciclistas cerca · w/kg</div>
+        <ol id="hNear"></ol>
+      </div>
+    </div>
+
+    <canvas id="hProfile" class="pprofile" width="1200" height="90"></canvas>
+    <div class="draft" id="hDraft" hidden>Rebufo</div>
+    <div class="banner" id="hBanner" hidden></div>
+    <div class="paused" id="hPaused" hidden>En pausa</div>
+
+    <div class="pctl">
+      <button type="button" class="round" id="btnPause" aria-label="Pausa">❚❚</button>
+      <button type="button" class="round" id="btnCam" aria-label="Cambiar cámara">◉</button>
+      <button type="button" class="round" id="btnMenu" aria-label="Menú">☰</button>
+      <span class="devdots" id="hDevs"></span>
+    </div>
+  </div>
+
+  <div class="sheet" id="rideMenu" hidden>
+    <div class="sheetbox">
+      <h3>Durante la salida</h3>
+      <div class="mrow" id="mErgRow"><span>Modo ERG (el rodillo fija los vatios)</span><label class="switch"><input type="checkbox" id="mErg" checked><span></span></label></div>
+      <div class="mrow" id="mBiasRow"><span>Intensidad</span><div class="stepper"><button type="button" id="mBiasMinus">−5 %</button><b id="mBias">100 %</b><button type="button" id="mBiasPlus">+5 %</button></div></div>
+      <div class="mrow" id="mSkipRow"><span>Bloque actual</span><button type="button" id="mSkip">Saltar bloque</button></div>
+      <div class="mrow"><span>Dificultad del rodillo en ruta</span><div class="range"><input type="range" id="mDiff" min="0" max="100" step="5"><b id="mDiffV">50 %</b></div></div>
+      <div class="mrow"><span>Pitidos en los cambios</span><label class="switch"><input type="checkbox" id="mBeep" checked><span></span></label></div>
+      <div class="mactions">
+        <button type="button" class="ghost" id="mClose">Seguir</button>
+        <button type="button" class="danger" id="mEnd">Terminar salida</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="sheet" id="endSheet" hidden>
+    <div class="sheetbox narrow">
+      <h3>¿Terminar la salida?</h3>
+      <p class="muted" id="endInfo"></p>
+      <div class="mactions col">
+        <button type="button" class="primary" id="eSave">Terminar y guardar</button>
+        <button type="button" class="ghost" id="eBack">Seguir pedaleando</button>
+        <button type="button" class="ghost dangertext" id="eDiscard">Descartar sin guardar</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ RESUMEN ============ -->
+<section id="summary" class="screen" hidden>
+  <div class="wrap">
+    <header class="top"><div><p class="sub" id="sDate"></p><h1 class="stitle" id="sTitle">Resumen</h1></div><button type="button" class="ghost" id="sClose">Cerrar</button></header>
+    <div class="sgrid" id="sGrid"></div>
+    <canvas id="sChart" width="1200" height="260"></canvas>
+    <div class="ftpbox" id="sFtp" hidden></div>
+    <section class="block">
+      <label class="field"><span>Nombre de la actividad</span><input type="text" id="sName" maxlength="90"></label>
+      <div class="sactions">
+        <button type="button" class="strava" id="sStrava">Subir a Strava</button>
+        <button type="button" class="ghost" id="sTcx">Descargar TCX</button>
+      </div>
+      <p class="upstate" id="sUp"></p>
+    </section>
+  </div>
+</section>
+
+<!-- ============ AJUSTES ============ -->
+<div class="sheet full" id="settings" hidden>
+  <div class="sheetbox">
+    <header class="sheethead"><h3>Ajustes</h3><button type="button" class="ghost" id="setClose">Hecho</button></header>
+    <h4 class="label">Ciclista</h4>
+    <div class="fields">
+      <label class="field"><span>Nombre en pantalla</span><input type="text" id="fName" maxlength="24"></label>
+      <label class="field"><span>FTP (W)</span><input type="number" id="fFtp" min="80" max="600" inputmode="numeric"></label>
+      <label class="field"><span>Peso (kg)</span><input type="number" id="fKg" min="35" max="150" step="0.5" inputmode="decimal"></label>
+      <label class="field"><span>Peso de la bici (kg)</span><input type="number" id="fBike" min="5" max="20" step="0.5" inputmode="decimal"></label>
+      <label class="field"><span>Color del maillot</span><input type="color" id="fJersey"></label>
+    </div>
+    <h4 class="label">Rodillo y gráficos</h4>
+    <div class="fields">
+      <label class="field"><span>Potencia que se registra</span><select id="fSource"><option value="trainer">La del rodillo</option><option value="pm">La del potenciómetro</option></select></label>
+      <label class="field"><span>Igualar potencia en ERG (con potenciómetro)</span><select id="fMatch"><option value="1">Sí</option><option value="0">No</option></select></label>
+      <label class="field"><span>Dificultad en ruta</span><select id="fDiff"><option value="25">25 %</option><option value="50">50 % (como Zwift)</option><option value="75">75 %</option><option value="100">100 % (pendiente real)</option></select></label>
+      <label class="field"><span>Calidad gráfica</span><select id="fQuality"><option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja (ahorra batería)</option></select></label>
+    </div>
+    <h4 class="label">Strava</h4>
+    <div class="stravabox" id="stravaBox"></div>
+    <h4 class="label">Datos</h4>
+    <p class="muted small">Todo se guarda solo en este navegador. Las salidas quedan en el historial aunque no se suban.</p>
+  </div>
+</div>
+
+<!-- ============ HISTORIAL ============ -->
+<div class="sheet full" id="history" hidden>
+  <div class="sheetbox">
+    <header class="sheethead"><h3>Historial</h3><button type="button" class="ghost" id="histClose">Cerrar</button></header>
+    <div id="histList" class="hist"></div>
+  </div>
+</div>
