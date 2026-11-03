@@ -24,8 +24,8 @@
 
   let renderer, scene, camera, sky, routeGroup, route, theme, quality = 'alta';
   let camPos = null;
-  const FOV = 58, AHEAD = 8, camH = D => 1.0 + 0.2 * D;
-  let fitD = 4.8, frame = null; // zona libre (px desde arriba) donde debe quedar el ciclista entero
+  const FOV = 58, AHEAD = 10, LOOKY = 0.8;
+  let fitD = 4.8, fitH = 2.0, frame = null; // zona libre (px desde arriba) entre los paneles
   const riders = new Map();
   const UP = new THREE.Vector3(0, 1, 0);
   const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
@@ -50,25 +50,109 @@
     renderer.setSize(w, h, false); fitCamera();
   };
   W.setFrame = (top, bottom) => { frame = { top, bottom }; fitCamera(); };
+  W.debugCam = () => ({ fitD, fitH, frame, fov: camera.fov, aspect: camera.aspect, view: camera.view && { ...camera.view } });
 
-  /* Elige la distancia de la cámara para que el ciclista ocupe el hueco libre y lo coloca ahí con un
-     desplazamiento de óptica (la carretera no se inclina). */
+  /* Metas volantes (dos como máximo: la que acabas de cruzar y la siguiente).
+     Como el horizonte queda bajo el panel central, lo importante va en el asfalto: una franja a cuadros
+     en el punto exacto del cambio y, antes, el siguiente bloque pintado en el suelo y alargado como una
+     marca vial. El arco es bajo y se ve al acercarte. */
+  const gatePool = [];
+  const BASIS = new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0));
+  function flat(across, along, mat) { const g = new THREE.PlaneGeometry(across, along); g.applyMatrix4(BASIS); const m = new THREE.Mesh(g, mat); m.rotation.order = 'YZX'; return m; }
+  function decal(tex) { return new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -6 }); }
+  /* La carretera pintada del color del siguiente bloque a partir de la línea (sigue las curvas) */
+  const STRIP_L = 80, STRIP_N = 40;
+  function makeStrip(tex) {
+    const pos = new Float32Array((STRIP_N + 1) * 6), uv = new Float32Array((STRIP_N + 1) * 4), idx = [];
+    for (let i = 0; i <= STRIP_N; i++) { const v = i / STRIP_N; uv.set([0, v, 1, v], i * 4); if (i < STRIP_N) { const a = i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); } }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.setIndex(idx);
+    const m = new THREE.Mesh(g, decal(tex)); m.frustumCulled = false; m.renderOrder = 1; return m;
+  }
+  function placeStrip(m, d0) {
+    const pos = m.geometry.attributes.position.array;
+    for (let i = 0; i <= STRIP_N; i++) {
+      const s = route.at(d0 + (i / STRIP_N) * STRIP_L), nx = -s.tz, nz = s.tx;
+      pos.set([s.x - nx * 3.95, s.y + 0.03, s.z - nz * 3.95, s.x + nx * 3.95, s.y + 0.03, s.z + nz * 3.95], i * 6);
+    }
+    m.geometry.attributes.position.needsUpdate = true; m.visible = true;
+  }
+  function makeGate() {
+    const mk = (w, h) => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const tex = new THREE.CanvasTexture(cv); tex.anisotropy = 8; return { cv, tex }; };
+    const beamC = mk(1024, 160), bandC = mk(512, 64), textC = mk(1024, 220), stripC = mk(4, 256);
+    const arch = new THREE.Group(); arch.rotation.order = 'YZX';
+    const postM = new THREE.MeshLambertMaterial({ color: 0x1d2630 }), postG = new THREE.BoxGeometry(0.35, 4.0, 0.35);
+    [-4.7, 4.7].forEach(z => { const p = new THREE.Mesh(postG, postM); p.position.set(0, 2.0, z); arch.add(p); });
+    const side = new THREE.MeshLambertMaterial({ color: 0xffffff }), face = new THREE.MeshBasicMaterial({ map: beamC.tex });
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.3, 9.75), [face, face, side, side, side, side]);
+    beam.position.set(0, 3.55, 0); arch.add(beam);
+    const band = flat(8.2, 1.8, decal(bandC.tex)), text = flat(7.0, 13, decal(textC.tex)), strip = makeStrip(stripC.tex);
+    band.renderOrder = 2; text.renderOrder = 3;
+    [arch, band, text, strip].forEach(o => { o.visible = false; scene.add(o); });
+    return { arch, band, text, strip, beamC, bandC, textC, stripC, side, key: '' };
+  }
+  function drawGate(gt, label, color) {
+    let x = gt.beamC.cv.getContext('2d'), W2 = 1024, H = 160;
+    x.fillStyle = color; x.fillRect(0, 0, W2, H);
+    x.fillStyle = 'rgba(10,15,20,.88)'; x.fillRect(0, 0, W2, 50);
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillStyle = '#fff'; x.font = 'italic 800 38px "Saira Condensed", "Arial Narrow", sans-serif'; x.fillText('META VOLANTE', W2 / 2, 27);
+    x.fillStyle = '#0a0f14'; x.font = '800 92px "Saira Condensed", "Arial Narrow", sans-serif'; x.fillText(label, W2 / 2, 50 + (H - 50) / 2 + 4);
+    gt.beamC.tex.needsUpdate = true; gt.side.color.set(color);
+    // Franja a cuadros
+    x = gt.bandC.cv.getContext('2d');
+    for (let i = 0; i < 16; i++) for (let j = 0; j < 2; j++) { x.fillStyle = (i + j) % 2 ? '#ffffff' : color; x.fillRect(i * 32, j * 32, 32, 32); }
+    gt.bandC.tex.needsUpdate = true;
+    // Texto en el asfalto
+    x = gt.textC.cv.getContext('2d'); x.clearRect(0, 0, 1024, 220);
+    x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = '800 150px "Saira Condensed", "Arial Narrow", sans-serif';
+    x.lineJoin = 'round'; x.lineWidth = 18; x.strokeStyle = 'rgba(10,15,20,.75)'; x.strokeText(label, 512, 116);
+    x.fillStyle = '#ffffff'; x.fillText(label, 512, 116);
+    gt.textC.tex.needsUpdate = true;
+    // Degradado del color de la zona: fuerte en la línea, se desvanece a lo lejos
+    x = gt.stripC.cv.getContext('2d'); x.clearRect(0, 0, 4, 256);
+    const gr = x.createLinearGradient(0, 0, 0, 256); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,1)');
+    x.fillStyle = color; x.fillRect(0, 0, 4, 256); x.globalCompositeOperation = 'destination-in'; x.fillStyle = gr; x.fillRect(0, 0, 4, 256); x.globalCompositeOperation = 'source-over';
+    gt.strip.material.opacity = 0.62; gt.stripC.tex.needsUpdate = true;
+  }
+  function placeAt(o, d, lift) {
+    const s = route.at(d);
+    o.position.set(s.x, s.y + lift, s.z); o.rotation.set(0, Math.atan2(-s.tz, s.tx), Math.atan(s.grade / 100)); o.visible = true;
+  }
+  W.setGates = list => {
+    if (!scene || !route) return;
+    while (gatePool.length < list.length) gatePool.push(makeGate());
+    gatePool.forEach((gt, i) => {
+      const it = list[i];
+      if (!it) { gt.arch.visible = gt.band.visible = gt.text.visible = gt.strip.visible = false; return; }
+      if (gt.key !== it.key) { drawGate(gt, it.text, it.color); gt.key = it.key; }
+      placeAt(gt.arch, it.d, 0); placeAt(gt.band, it.d, 0.045); placeStrip(gt.strip, it.d + 0.9);
+      if (it.passed) gt.text.visible = false; else placeAt(gt.text, it.d + 9, 0.05);
+    });
+  };
+
+
+  /* Encuadre fijo: el horizonte justo bajo el panel central, el ciclista abajo (más cerca de ti) y,
+     entre los dos, la carretera que viene, donde se ve llegar la meta volante. Se busca la distancia y
+     la altura de la cámara que lo consiguen y se coloca con un desplazamiento de óptica. */
   function fitCamera() {
     if (!renderer) return;
     const c = renderer.domElement, w = c.clientWidth || window.innerWidth, h = Math.max(1, c.clientHeight || window.innerHeight);
     camera.fov = FOV; camera.aspect = w / h; camera.clearViewOffset();
-    if (!frame || frame.bottom - frame.top < 50) { fitD = 4.8; camera.updateProjectionMatrix(); return; }
-    const cam = new THREE.PerspectiveCamera(FOV, w / h, 0.3, 100), head = new THREE.Vector3(), foot = new THREE.Vector3();
-    const want = (frame.bottom - frame.top) * 0.82;
+    if (!frame || frame.bottom - frame.top < 60) { fitD = 4.8; fitH = 2.0; camera.updateProjectionMatrix(); return; }
+    const box = frame.bottom - frame.top, wantRider = box * 0.68, wantSpan = box * 0.95;
+    const cam = new THREE.PerspectiveCamera(FOV, w / h, 0.3, 5000), head = new THREE.Vector3(), foot = new THREE.Vector3(), far = new THREE.Vector3();
+    const Y = v => (1 - v.y) / 2 * h;
     let best = null;
-    for (let D = 2.6; D <= 16; D += 0.2) {
-      cam.position.set(-D, camH(D), 0); cam.lookAt(AHEAD, 1.0, 0); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
-      head.set(0.42, 1.6, 0).project(cam); foot.set(-0.8, 0, 0).project(cam);
-      const hy = (1 - head.y) / 2 * h, fy = (1 - foot.y) / 2 * h, err = Math.abs(fy - hy - want);
-      if (!best || err < best.err) best = { D, err, hy, fy };
+    for (let D = 2.6; D <= 14; D += 0.2) {
+      for (let H = 1.6; H <= 6; H += 0.1) {
+        cam.position.set(-D, H, 0); cam.lookAt(AHEAD, LOOKY, 0); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
+        const hy = Y(head.set(0.42, 1.6, 0).project(cam)), fy = Y(foot.set(-0.6, 0, 0).project(cam)), zy = Y(far.set(4000, H, 0).project(cam));
+        const err = Math.abs(fy - hy - wantRider) + Math.abs(fy - zy - wantSpan);
+        if (!best || err < best.err) best = { D, H, err, fy };
+      }
     }
-    fitD = best.D;
-    const s = R.clamp((frame.top + frame.bottom) / 2 - (best.hy + best.fy) / 2, -0.45 * h, 0.45 * h), a = Math.abs(s), full = h + 2 * a;
+    fitD = best.D; fitH = best.H;
+    const s = R.clamp(frame.bottom - box * 0.03 - best.fy, -0.45 * h, 0.45 * h), a = Math.abs(s), full = h + 2 * a;
     camera.fov = 2 * Math.atan(Math.tan(FOV * Math.PI / 360) * full / h) * 180 / Math.PI;
     camera.aspect = w / full;
     camera.setViewOffset(w, full, 0, s >= 0 ? 0 : 2 * a, w, h);
@@ -352,9 +436,9 @@
       if (vis) { placeRider(r, b.d, b.lane, b.crank, b.wheel); if (r.tag) r.tag.visible = Math.abs(gap) < 60 && Math.abs(gap) > 2; }
     });
     const lane = player.lane, s = route.at(player.d - fitD), t = route.at(player.d + AHEAD);
-    tmpV2.set(s.x - s.tz * lane, s.y + camH(fitD), s.z + s.tx * lane);
-    if (!camPos) camPos = tmpV2.clone(); else camPos.lerp(tmpV2, 1 - Math.exp(-dt * 6));
-    camera.position.copy(camPos); camera.lookAt(t.x - t.tz * lane, t.y + 1.0, t.z + t.tx * lane);
+    tmpV2.set(s.x - s.tz * lane, s.y + fitH, s.z + s.tx * lane);
+    if (!camPos) camPos = tmpV2.clone(); else camPos.copy(tmpV2);
+    camera.position.copy(camPos); camera.lookAt(t.x - t.tz * lane, t.y + LOOKY, t.z + t.tx * lane);
     if (sky) sky.position.copy(camera.position);
     renderer.render(scene, camera);
   };

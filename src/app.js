@@ -181,6 +181,7 @@
     if (!ride || !ride.running) return;
     dt = Math.min(dt, 2);
     let rem = dt; while (rem > 1e-4) { const h = Math.min(0.1, rem); step(h); rem -= h; }
+    updateGates(Math.min(dt, 0.1));
     W.render(ride.player, ride.bots, Math.min(dt, 0.1));
     hudT += dt; profT += dt;
     if (hudT >= 0.25) { hudT = 0; updateHud(); }
@@ -255,6 +256,7 @@
     }
   }
   function onStepChange() {
+    if (ride.nextGate) { ride.passedGate = { ...ride.nextGate, d: Math.max(ride.nextGate.d, ride.player.d), passed: true }; ride.nextGate = null; ride.gateD = null; }
     R.audio.beep(run_isDone() ? 520 : 940, 0.32, 0.2);
     renderSteps();
   }
@@ -278,7 +280,7 @@
       ol.scrollTop = keep;
     }
     Array.from(ol.children).forEach((li, i) => { li.className = run.done || i < run.idx ? 'done' : i === run.idx ? 'cur' : ''; });
-    $('#hStepCount').textContent = run.done ? 'Entrenamiento completado' : `Bloque ${run.idx + 1} de ${run.steps.length}`;
+    $('#hStepCount').textContent = run.done ? 'Hecho' : `${run.idx + 1}/${run.steps.length}`;
     followSteps(Date.now() - stepsTouched > 2500);
   }
   function followSteps(force) {
@@ -287,6 +289,29 @@
     const cur = ol.children[run.idx]; if (!cur) return;
     const prev = cur.previousElementSibling, target = Math.max(0, cur.offsetTop - (prev ? prev.offsetHeight + 3 : 0));
     if (Math.abs(ol.scrollTop - target) > 2) ol.scrollTop = target;
+  }
+
+  const stepLabel = (s, run) => {
+    if (s.free) return `${R.fmtStepDur(s.dur)} libre`;
+    const w = R.stepWatts(s, set.ftp, run.bias, 0), w2 = R.stepWatts(s, set.ftp, run.bias, 1);
+    return `${R.fmtStepDur(s.dur)} @ ${w === w2 ? w : w + '–' + w2}W`;
+  };
+  const stepColor = (s, run) => s.free ? '#8a97a5' : R.zc(((R.stepWatts(s, set.ftp, run.bias, 0) + R.stepWatts(s, set.ftp, run.bias, 1)) / 2) / set.ftp);
+
+  /* Meta volante: un arco en la carretera justo donde empieza el siguiente bloque. Aparece 30 s antes,
+     se acerca a tu ritmo y lo cruzas en el momento del cambio. */
+  function updateGates(dt) {
+    const rd = ride, run = rd.run, p = rd.player, gates = [];
+    if (rd.passedGate && p.d < rd.passedGate.d + 30) gates.push(rd.passedGate); else rd.passedGate = null;
+    if (run && !run.done && run.next() && run.left() <= 30) {
+      const left = run.left(), est = p.d + Math.max(p.v, 1.5) * left;
+      rd.gateD = rd.gateD == null || left < 2 ? est : rd.gateD + (est - rd.gateD) * (1 - Math.exp(-dt * 3));
+      rd.gateD = Math.max(rd.gateD, p.d);
+      const n = run.next();
+      rd.nextGate = { d: rd.gateD, key: 'g' + run.idx + stepLabel(n, run), text: stepLabel(n, run), color: stepColor(n, run) };
+      gates.push(rd.nextGate);
+    } else { rd.gateD = null; rd.nextGate = null; }
+    W.setGates(gates);
   }
 
   /* Hueco libre entre los paneles donde se coloca al ciclista */
@@ -298,7 +323,8 @@
     ['.pwork', '.pstats', '.pctl', '.pprofile'].forEach(sel => {
       const el = $(sel); if (!el || el.offsetParent === null || getComputedStyle(el).display === 'none') return;
       const r = el.getBoundingClientRect();
-      if (r.width && r.left < cx + 45 && r.right > cx - 45 && r.top - cv.top > top) bottom = Math.min(bottom, r.top - cv.top - 4);
+      const lim = sel === '.pprofile' ? r.top + r.height * 0.55 : r.top - 4;
+      if (r.width && r.left < cx + 45 && r.right > cx - 45 && r.top - cv.top > top) bottom = Math.min(bottom, lim - cv.top);
     });
     W.setFrame(top, bottom);
   }
@@ -342,12 +368,8 @@
     else if (s && s.free) tBox.querySelector('.tw').lastChild.textContent = 'W';
     if (run) $('#hWorkLeft').textContent = R.fmtTime(Math.max(0, run.total - run.t));
     // Aviso del siguiente bloque
-    const ban = $('#hBanner');
-    if (run && !run.done && run.next() && run.left() <= 8 && run.cur().dur > 12) {
-      const n = run.next(), w = R.stepWatts(n, set.ftp, run.bias, 0);
-      ban.innerHTML = `<small>Siguiente en ${Math.ceil(run.left())} s</small>${n.free ? 'Libre ' + R.fmtStepDur(n.dur) : `${R.fmtStepDur(n.dur)} @ ${w} W`}`;
-      ban.hidden = false;
-    } else ban.hidden = true;
+    $('#hBanner').hidden = true;
+    if (run && !run.done && run.next() && run.left() <= 10) $('#hStepLeft').textContent = `${R.fmtTime(run.left())} → ${stepLabel(run.next(), run)}`;
     $('#hDraft').hidden = !rd.bots.draftFor(p) || p.v < 3;
     $('#btnSkip').hidden = !run || run.done;
     followSteps(false);
@@ -372,6 +394,9 @@
 
   /* Si el navegador ya deja libre la zona de la cámara (Bluefy), no añadimos otro margen */
   function hostInsets() {
+    // Bluefy ya deja libre la zona de la cámara (se ve el margen gris a los lados): no añadimos otro
+    const bluefy = !!(window.BLENative || (navigator.bluetooth && typeof navigator.bluetooth.setScreenDimEnabled === 'function') || /bluefy/i.test(navigator.userAgent));
+    if (bluefy) { document.documentElement.classList.add('inset-host'); return; }
     const longSide = Math.max(screen.width, screen.height), shortSide = Math.min(screen.width, screen.height);
     const edge = window.innerWidth > window.innerHeight ? longSide : shortSide;
     document.documentElement.classList.toggle('inset-host', window.innerWidth < edge - 4);
