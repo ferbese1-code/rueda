@@ -92,7 +92,61 @@
       }
     }
     if (!steps.length) throw new Error('No se encontraron bloques de entrenamiento en el archivo');
-    return { id: 'zwo-' + Date.now().toString(36), name: pick('name') || fname.replace(/\.zwo$/i, ''), desc: pick('description').slice(0, 140) || 'Importado de .zwo', steps, custom: true };
+    return { id: newId(), name: pick('name') || fname.replace(/\.zwo$/i, ''), desc: pick('description').slice(0, 140) || 'Importado de .zwo', steps, custom: true };
+  };
+
+  const newId = () => 'w-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+  /* Importar .erg (vatios) y .mrc (% FTP): TrainingPeaks, TrainerRoad, Golden Cheetah… */
+  R.parseErgMrc = (text, fname) => {
+    let inData = false, pct = /\.mrc$/i.test(fname) ? true : /\.erg$/i.test(fname) ? false : null, ftpFile = 0, desc = '', name = '';
+    const pts = [];
+    for (const raw of text.split(/\r?\n/)) {
+      const l = raw.trim(); if (!l) continue;
+      const up = l.toUpperCase();
+      if (up.startsWith('[COURSE DATA]')) { inData = true; continue; }
+      if (up.startsWith('[')) { inData = false; continue; }
+      if (!inData) {
+        if (/MINUTES\s+PERCENT/i.test(l)) { pct = true; continue; }
+        if (/MINUTES\s+WATTS/i.test(l)) { pct = false; continue; }
+        const m = l.match(/^([A-Za-z ]+?)\s*=\s*(.*)$/);
+        if (m) {
+          const k = m[1].trim().toUpperCase(), v = m[2].trim();
+          if (k === 'DESCRIPTION') desc = v;
+          if (k === 'FILE NAME') name = v.replace(/\.(erg|mrc)$/i, '');
+          if (k === 'FTP') ftpFile = parseFloat(v) || 0;
+        }
+        continue;
+      }
+      const n = l.split(/[\s,;]+/).map(parseFloat);
+      if (n.length >= 2 && isFinite(n[0]) && isFinite(n[1])) pts.push([n[0], n[1]]);
+    }
+    if (pts.length < 2) throw new Error('El archivo no tiene datos de entrenamiento ([COURSE DATA])');
+    if (pct == null) pct = Math.max(...pts.map(p => p[1])) <= 200;
+    const steps = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const dur = Math.round((pts[i + 1][0] - pts[i][0]) * 60);
+      if (dur <= 0) continue;
+      let a = pts[i][1], b = pts[i + 1][1], abs = false;
+      if (pct) { a /= 100; b /= 100; }
+      else if (ftpFile > 0) { a /= ftpFile; b /= ftpFile; } // se adapta a tu FTP
+      else abs = true;
+      const prev = steps[steps.length - 1];
+      if (prev && prev.p1 === prev.p2 && a === b && prev.p1 === a && !!prev.abs === abs) { prev.dur += dur; continue; }
+      steps.push(abs ? { dur, p1: a, p2: b, abs: true } : { dur, p1: a, p2: b });
+    }
+    if (!steps.length) throw new Error('No se encontraron bloques de entrenamiento en el archivo');
+    const ext = (fname.match(/\.(erg|mrc)$/i) || ['', pct ? 'mrc' : 'erg'])[1].toLowerCase();
+    return { id: newId(), name: name || desc.slice(0, 60) || fname.replace(/\.(erg|mrc)$/i, ''), desc: (desc && desc !== name ? desc : 'Importado de .' + ext).slice(0, 140), steps, custom: true };
+  };
+
+  /* Elige el lector según la extensión o el contenido */
+  R.parseWorkoutFile = (text, fname) => {
+    const t = text.replace(/^﻿/, '');
+    if (/\.fit$/i.test(fname)) throw new Error('Los .fit de entrenamiento no se pueden importar. Expórtalo como .zwo, .erg o .mrc');
+    if (/\.zwo$/i.test(fname) || /<workout(_file)?[\s>]/i.test(t)) return R.parseZwo(t, fname);
+    if (/\.(erg|mrc)$/i.test(fname) || /\[COURSE (HEADER|DATA)\]/i.test(t)) return R.parseErgMrc(t, fname);
+    throw new Error('Formato no reconocido. Usa .zwo, .erg o .mrc');
   };
 
   R.allWorkouts = () => R.BUILTIN_WORKOUTS.concat(R.store.get('customWorkouts', []));

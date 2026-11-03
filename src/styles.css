@@ -36,6 +36,8 @@ b { font-weight: 700; }
 .strava:disabled { opacity: .5; }
 .file { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; }
 .file input { display: none; }
+.importrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.importrow .muted { min-width: 0; flex: 1 1 220px; line-height: 1.4; }
 
 /* ---------- Inicio ---------- */
 .screen { position: fixed; inset: 0; overflow: hidden; }

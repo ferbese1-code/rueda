@@ -644,7 +644,12 @@
     $('#zwoInput').addEventListener('change', async e => {
       const files = Array.from(e.target.files || []); let ok = 0;
       for (const f of files) {
-        try { const w = R.parseZwo(await f.text(), f.name); const list = R.store.get('customWorkouts', []); list.push(w); R.store.set('customWorkouts', list); selWorkout = w.id; ok++; }
+        try {
+          const w = R.parseWorkoutFile(await f.text(), f.name), list = R.store.get('customWorkouts', []);
+          const same = list.find(x => x.name === w.name && JSON.stringify(x.steps) === JSON.stringify(w.steps));
+          if (same) { selWorkout = same.id; ok++; continue; } // ya estaba importado
+          list.push(w); R.store.set('customWorkouts', list); selWorkout = w.id; ok++;
+        }
         catch (err) { R.toast(`${f.name}: ${err.message}`, 'bad'); }
       }
       if (ok) { R.store.set('workout', selWorkout); renderWorkouts(); R.toast(ok === 1 ? 'Entrenamiento importado' : `${ok} entrenamientos importados`, 'ok'); }
