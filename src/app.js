@@ -163,6 +163,7 @@
     if (demo) dev.sim.resting = false;
     $('#hRoute').textContent = ride.route.name;
     $('#hWork').hidden = !ride.run;
+    $('#btnSkip').hidden = !ride.run; $('.hud').classList.toggle('work', !!ride.run); disarmSkip(); nearRows = 7;
     $('#mErgRow').hidden = $('#mBiasRow').hidden = $('#mSkipRow').hidden = !ride.run;
     if (ride.run) { $('#hWorkName').textContent = ride.wdef.name; renderSteps(); }
     $('#hPaused').hidden = true;
@@ -324,24 +325,55 @@
       ban.hidden = false;
     } else ban.hidden = true;
     $('#hDraft').hidden = !rd.bots.draftFor(p) || p.v < 3;
+    $('#btnSkip').hidden = !run || run.done;
     renderNear(); drawMap();
     // Sensores
     const dots = [trainer(), dev.hrm.status !== 'off' ? dev.hrm : null, dev.pm.status !== 'off' ? dev.pm : null].filter(Boolean);
     $('#hDevs').innerHTML = dots.map(d => `<i class="${d.fresh() ? '' : 'bad'}" title="${R.esc(d.label)}"></i>`).join('');
   }
 
+  /* Ciclistas cerca: tantas filas como quepan, siempre contigo en medio */
+  let nearRows = 7;
   function renderNear() {
-    const rd = ride, p = rd.player, items = rd.bots.nearest(p, 6).map(o => ({
-      name: o.b.name, flag: o.b.flag, gap: o.gap, wkg: o.b.power / o.b.kg
-    }));
-    items.push({ me: true, name: set.name || 'Tú', gap: 0, wkg: rd.pEma / set.weight });
-    items.sort((a, b) => b.gap - a.gap);
-    const v = Math.max(p.v, 4);
-    $('#hNear').innerHTML = items.map(o => {
-      const t = Math.abs(o.gap) / v, sign = o.gap > 0 ? '−' : '+';
-      const g = o.me ? '' : `${sign}${R.fmtTime(t)}`;
+    const box = $('#hNear'), panel = $('.pnear');
+    if (!panel || panel.offsetParent === null) return; // oculto en vertical
+    const rd = ride, p = rd.player, v = Math.max(p.v, 4);
+    const all = rd.bots.nearest(p, 12).map(o => ({ name: o.b.name, flag: o.b.flag, gap: o.gap, wkg: o.b.power / o.b.kg }));
+    const ahead = all.filter(o => o.gap > 0).sort((a, b) => a.gap - b.gap), behind = all.filter(o => o.gap <= 0).sort((a, b) => b.gap - a.gap);
+    const me = { me: true, name: set.name || 'Tú', gap: 0, wkg: rd.pEma / set.weight };
+    const row = o => {
+      const g = o.me ? '' : `${o.gap > 0 ? '−' : '+'}${R.fmtTime(Math.abs(o.gap) / v)}`;
       return `<li class="${o.me ? 'me' : ''}"><span class="g">${g}</span><span class="n">${R.esc(o.name)}</span><span class="w">${R.fmtNum(o.wkg, 1)}${o.flag ? ' ' + o.flag : ''}</span></li>`;
-    }).join('');
+    };
+    for (let tries = 0; tries < 6; tries++) {
+      const others = nearRows - 1;
+      let nA = Math.min(ahead.length, Math.floor(others / 2)), nB = Math.min(behind.length, others - nA);
+      nA = Math.min(ahead.length, others - nB);
+      box.innerHTML = ahead.slice(0, nA).reverse().concat([me], behind.slice(0, nB)).map(row).join('');
+      if (panel.scrollHeight <= panel.clientHeight + 1 || nearRows <= 3) break;
+      nearRows--;
+    }
+  }
+
+  /* Botón de siguiente bloque: un toque lo prepara, el segundo salta (evita saltos sin querer) */
+  let skipArmed = 0, skipTimer = null;
+  function disarmSkip() { skipArmed = 0; clearTimeout(skipTimer); const b = $('#btnSkip'); if (b) b.classList.remove('armed'); }
+  function skipBlock() {
+    if (!ride || !ride.run || ride.run.done) return;
+    if (Date.now() - skipArmed < 3000) {
+      disarmSkip(); ride.run.skip(); onStepChange(); updateHud();
+      R.toast(ride.run.done ? 'Entrenamiento terminado' : 'Siguiente bloque');
+      return;
+    }
+    skipArmed = Date.now(); $('#btnSkip').classList.add('armed');
+    skipTimer = setTimeout(disarmSkip, 3000);
+  }
+
+  /* Si el navegador ya deja libre la zona de la cámara (Bluefy), no añadimos otro margen */
+  function hostInsets() {
+    const longSide = Math.max(screen.width, screen.height), shortSide = Math.min(screen.width, screen.height);
+    const edge = window.innerWidth > window.innerHeight ? longSide : shortSide;
+    document.documentElement.classList.toggle('inset-host', window.innerWidth < edge - 4);
   }
 
   /* Minimapa: planta + perfil completo */
@@ -669,7 +701,8 @@
     $('#mErg').onchange = e => { ride.erg = e.target.checked; };
     const bias = d => { if (!ride || !ride.run) return; ride.run.bias = R.clamp(Math.round((ride.run.bias + d) * 100) / 100, 0.5, 1.5); $('#mBias').textContent = Math.round(ride.run.bias * 100) + ' %'; renderSteps(); prepProfile(); };
     $('#mBiasMinus').onclick = () => bias(-0.05); $('#mBiasPlus').onclick = () => bias(0.05);
-    $('#mSkip').onclick = () => { if (ride && ride.run) { ride.run.skip(); onStepChange(); } };
+    $('#mSkip').onclick = () => { if (ride && ride.run && !ride.run.done) { ride.run.skip(); onStepChange(); updateHud(); } };
+    $('#btnSkip').onclick = skipBlock;
     $('#mDiff').oninput = e => { set.difficulty = parseInt(e.target.value, 10); $('#mDiffV').textContent = set.difficulty + ' %'; saveSet(); };
     $('#mBeep').onchange = e => { set.beep = e.target.checked; R.audio.on = set.beep; saveSet(); };
     $('#eBack').onclick = () => { $('#endSheet').hidden = true; };
@@ -691,7 +724,8 @@
       if (e.code === 'Space') { e.preventDefault(); togglePause(); }
       if (e.key === 'c') R.toast('Cámara: ' + W.cycleCamera());
     });
-    window.addEventListener('resize', () => { if (ride) { setTimeout(() => { W.resize(); sizeHudCanvases(); prepMap(); prepProfile(); drawProfile(); }, 120); } });
+    hostInsets();
+    window.addEventListener('resize', () => { hostInsets(); nearRows = 7; if (ride) { setTimeout(() => { W.resize(); sizeHudCanvases(); prepMap(); prepProfile(); drawProfile(); }, 120); } });
     document.addEventListener('visibilitychange', () => { if (!document.hidden && ride && ride.running) R.wake.on(); });
     window.addEventListener('beforeunload', () => { if (ride && ride.running && ride.samples.p.length > 30) R.idb.put(snapshot('live')); });
 

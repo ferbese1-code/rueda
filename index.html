@@ -117,10 +117,17 @@ h1 { font-family: var(--num); font-weight: 800; font-style: italic; font-size: 3
 #ride { background: #000; touch-action: manipulation; }
 #gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .hud { position: absolute; inset: 0; pointer-events: none; font-family: var(--num); font-variant-numeric: tabular-nums;
-  --gt: max(8px, env(safe-area-inset-top, 0px)); --gl: max(8px, env(safe-area-inset-left, 0px)); --gr: max(8px, env(safe-area-inset-right, 0px)); --gb: max(6px, env(safe-area-inset-bottom, 0px)); }
+  --gt: max(8px, env(safe-area-inset-top, 0px)); --gl: max(8px, env(safe-area-inset-left, 0px)); --gr: max(8px, env(safe-area-inset-right, 0px)); --gb: max(6px, env(safe-area-inset-bottom, 0px));
+  /* anchos de los paneles laterales: el central ocupa lo que queda entre ellos, sin taparse */
+  --pw: clamp(140px, 19vw, 270px); --prw: clamp(140px, 21vw, 290px); --side: max(var(--pw), var(--prw)); --ctlw: 150px; }
+.hud.work { --ctlw: 198px; }
+/* Navegadores como Bluefy ya dejan el margen de la cámara: no lo sumamos otra vez */
+.inset-host .hud { --gl: 8px; --gr: 8px; }
+.inset-host .wrap { padding-left: 16px; padding-right: 16px; }
+.inset-host .startbar { padding-left: 16px; padding-right: 16px; }
 .hud button { pointer-events: auto; }
 .plate { background: var(--plate); border: 1px solid var(--line); border-radius: 10px; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
-.pmain { position: absolute; top: var(--gt); left: 50%; transform: translateX(-50%); width: clamp(300px, 46vw, 600px); padding: 6px 10px 8px; }
+.pmain { position: absolute; top: var(--gt); left: calc(var(--gl) + var(--side) + 8px); right: calc(var(--gr) + var(--side) + 8px); max-width: 600px; margin-inline: auto; padding: 6px 10px 8px; }
 .prow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
 .stat { display: flex; align-items: baseline; justify-content: center; gap: 3px; }
 .stat b { font-size: clamp(17px, 4.6vmin, 32px); font-weight: 800; }
@@ -143,7 +150,7 @@ h1 { font-family: var(--num); font-weight: 800; font-style: italic; font-size: 3
 #hStepFill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--z3); opacity: .85; }
 #hStepLeft { position: relative; display: block; text-align: center; font-size: 12px; font-weight: 700; line-height: 14px; }
 
-.pwork { position: absolute; top: var(--gt); left: var(--gl); width: clamp(150px, 19vw, 270px); padding: 6px 8px; max-height: calc(100% - 120px); overflow: hidden; }
+.pwork { position: absolute; top: var(--gt); left: var(--gl); width: var(--pw); padding: 6px 8px; max-height: calc(100% - 120px); overflow: hidden; }
 .wtitle { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wend { font-size: 12px; color: var(--muted); text-align: right; }
 .wend b { color: var(--fg); font-size: 15px; }
@@ -153,7 +160,7 @@ h1 { font-family: var(--num); font-weight: 800; font-style: italic; font-size: 3
 .wsteps li.cur { font-size: 18px; padding: 3px 6px; background: var(--zc); color: #0a0f14; justify-content: center; }
 .wcount { font-size: 12px; color: var(--muted); text-align: right; margin-top: 3px; }
 
-.pright { position: absolute; top: var(--gt); right: var(--gr); width: clamp(150px, 21vw, 290px); display: flex; flex-direction: column; gap: 6px; max-height: calc(100% - 110px); }
+.pright { position: absolute; top: var(--gt); right: var(--gr); width: var(--prw); display: flex; flex-direction: column; gap: 6px; max-height: calc(100% - 110px); }
 .pmap { position: relative; overflow: hidden; }
 #hMap { width: 100%; height: auto; aspect-ratio: 16 / 10; display: block; }
 .grade { position: absolute; top: 4px; right: 8px; font-size: clamp(18px, 4.6vmin, 32px); font-weight: 800; text-shadow: 0 1px 3px rgba(0, 0, 0, .6); }
@@ -168,9 +175,14 @@ h1 { font-family: var(--num); font-weight: 800; font-style: italic; font-size: 3
 #hNear li.me { background: rgba(255, 178, 46, .9); color: var(--amber-ink); }
 #hNear li.me .g, #hNear li.me .w { color: var(--amber-ink); }
 
-.pprofile { position: absolute; left: calc(var(--gl) + 150px); right: var(--gr); bottom: var(--gb); width: auto; height: clamp(34px, 10vh, 84px); border-radius: 8px; background: var(--plate); border: 1px solid var(--line); }
+.pprofile { position: absolute; left: calc(var(--gl) + var(--ctlw)); right: var(--gr); bottom: var(--gb); width: auto; height: clamp(34px, 10vh, 84px); border-radius: 8px; background: var(--plate); border: 1px solid var(--line); }
 .pctl { position: absolute; left: var(--gl); bottom: var(--gb); display: flex; gap: 6px; align-items: center; }
 .round { width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line); background: var(--plate); font-size: 15px; display: grid; place-items: center; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.round svg { width: 18px; height: 18px; display: block; }
+.skip { position: relative; }
+.skip span { display: none; position: absolute; left: 0; bottom: 50px; white-space: nowrap; background: var(--amber); color: var(--amber-ink); font-weight: 700; font-size: 15px; padding: 6px 10px; border-radius: 8px; }
+.skip.armed { background: var(--amber); color: var(--amber-ink); border-color: var(--amber); }
+.skip.armed span { display: block; }
 .devdots { display: flex; gap: 3px; margin-left: 2px; }
 .devdots i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
 .devdots i.bad { background: var(--bad); animation: pulse 1s infinite; }
@@ -180,7 +192,7 @@ h1 { font-family: var(--num); font-weight: 800; font-style: italic; font-size: 3
 .paused { position: absolute; inset: 0; display: grid; place-items: center; font-size: 40px; font-weight: 800; font-style: italic; text-transform: uppercase; background: rgba(0, 0, 0, .35); letter-spacing: .06em; }
 
 @media (orientation: portrait) {
-  .pmain { width: calc(100% - var(--gl) - var(--gr)); }
+  .pmain { left: var(--gl); right: var(--gr); max-width: none; }
   .pcore { grid-template-columns: minmax(0, 1fr) auto minmax(0, .8fr); gap: 6px; }
   .stat i { font-size: 10px; }
   .pwork { top: auto; bottom: calc(var(--gb) + 56px); width: 46%; max-height: 32%; }
@@ -190,10 +202,14 @@ h1 { font-family: var(--num); font-weight: 800; font-style: italic; font-size: 3
   .pprofile { display: none; }
   .draft { top: calc(var(--gt) + 175px); }
 }
-@media (max-height: 360px) and (orientation: landscape) {
-  .pmain { width: clamp(280px, 44vw, 600px); }
-  .prow .stat i { display: none; }
+@media (max-height: 430px) and (orientation: landscape) {
+  .hud { --pw: clamp(132px, 18vw, 230px); --prw: clamp(132px, 19vw, 240px); }
+  .wtitle { font-size: 13px; }
+  .wsteps li { font-size: 12px; }
+  .wsteps li.cur { font-size: 15px; }
+  .pwork, .pright { max-height: calc(100% - var(--gt) - var(--gb) - 54px); }
 }
+
 
 /* ---------- Hojas ---------- */
 .sheet { position: fixed; inset: 0; background: rgba(4, 8, 12, .62); display: flex; align-items: center; justify-content: center; z-index: 30; padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
@@ -349,7 +365,7 @@ h1 { font-family: var(--num); font-weight: 800; font-style: italic; font-size: 3
         <div class="rname" id="hRoute"></div>
       </div>
       <div class="plate pnear">
-        <div class="ntitle">Ciclistas cerca · w/kg</div>
+        <div class="ntitle">Cerca · w/kg</div>
         <ol id="hNear"></ol>
       </div>
     </div>
@@ -361,6 +377,7 @@ h1 { font-family: var(--num); font-weight: 800; font-style: italic; font-size: 3
 
     <div class="pctl">
       <button type="button" class="round" id="btnPause" aria-label="Pausa">❚❚</button>
+      <button type="button" class="round skip" id="btnSkip" aria-label="Siguiente bloque" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.5v13l7.5-6.5zM10.5 5.5v13L18 12z"/><rect x="18.4" y="5.5" width="2.4" height="13" rx="1" fill="currentColor"/></svg><span>Toca otra vez para saltar</span></button>
       <button type="button" class="round" id="btnCam" aria-label="Cambiar cámara">◉</button>
       <button type="button" class="round" id="btnMenu" aria-label="Menú">☰</button>
       <span class="devdots" id="hDevs"></span>
@@ -1911,6 +1928,7 @@ ${pts.join('\n')}
     if (demo) dev.sim.resting = false;
     $('#hRoute').textContent = ride.route.name;
     $('#hWork').hidden = !ride.run;
+    $('#btnSkip').hidden = !ride.run; $('.hud').classList.toggle('work', !!ride.run); disarmSkip(); nearRows = 7;
     $('#mErgRow').hidden = $('#mBiasRow').hidden = $('#mSkipRow').hidden = !ride.run;
     if (ride.run) { $('#hWorkName').textContent = ride.wdef.name; renderSteps(); }
     $('#hPaused').hidden = true;
@@ -2072,24 +2090,55 @@ ${pts.join('\n')}
       ban.hidden = false;
     } else ban.hidden = true;
     $('#hDraft').hidden = !rd.bots.draftFor(p) || p.v < 3;
+    $('#btnSkip').hidden = !run || run.done;
     renderNear(); drawMap();
     // Sensores
     const dots = [trainer(), dev.hrm.status !== 'off' ? dev.hrm : null, dev.pm.status !== 'off' ? dev.pm : null].filter(Boolean);
     $('#hDevs').innerHTML = dots.map(d => `<i class="${d.fresh() ? '' : 'bad'}" title="${R.esc(d.label)}"></i>`).join('');
   }
 
+  /* Ciclistas cerca: tantas filas como quepan, siempre contigo en medio */
+  let nearRows = 7;
   function renderNear() {
-    const rd = ride, p = rd.player, items = rd.bots.nearest(p, 6).map(o => ({
-      name: o.b.name, flag: o.b.flag, gap: o.gap, wkg: o.b.power / o.b.kg
-    }));
-    items.push({ me: true, name: set.name || 'Tú', gap: 0, wkg: rd.pEma / set.weight });
-    items.sort((a, b) => b.gap - a.gap);
-    const v = Math.max(p.v, 4);
-    $('#hNear').innerHTML = items.map(o => {
-      const t = Math.abs(o.gap) / v, sign = o.gap > 0 ? '−' : '+';
-      const g = o.me ? '' : `${sign}${R.fmtTime(t)}`;
+    const box = $('#hNear'), panel = $('.pnear');
+    if (!panel || panel.offsetParent === null) return; // oculto en vertical
+    const rd = ride, p = rd.player, v = Math.max(p.v, 4);
+    const all = rd.bots.nearest(p, 12).map(o => ({ name: o.b.name, flag: o.b.flag, gap: o.gap, wkg: o.b.power / o.b.kg }));
+    const ahead = all.filter(o => o.gap > 0).sort((a, b) => a.gap - b.gap), behind = all.filter(o => o.gap <= 0).sort((a, b) => b.gap - a.gap);
+    const me = { me: true, name: set.name || 'Tú', gap: 0, wkg: rd.pEma / set.weight };
+    const row = o => {
+      const g = o.me ? '' : `${o.gap > 0 ? '−' : '+'}${R.fmtTime(Math.abs(o.gap) / v)}`;
       return `<li class="${o.me ? 'me' : ''}"><span class="g">${g}</span><span class="n">${R.esc(o.name)}</span><span class="w">${R.fmtNum(o.wkg, 1)}${o.flag ? ' ' + o.flag : ''}</span></li>`;
-    }).join('');
+    };
+    for (let tries = 0; tries < 6; tries++) {
+      const others = nearRows - 1;
+      let nA = Math.min(ahead.length, Math.floor(others / 2)), nB = Math.min(behind.length, others - nA);
+      nA = Math.min(ahead.length, others - nB);
+      box.innerHTML = ahead.slice(0, nA).reverse().concat([me], behind.slice(0, nB)).map(row).join('');
+      if (panel.scrollHeight <= panel.clientHeight + 1 || nearRows <= 3) break;
+      nearRows--;
+    }
+  }
+
+  /* Botón de siguiente bloque: un toque lo prepara, el segundo salta (evita saltos sin querer) */
+  let skipArmed = 0, skipTimer = null;
+  function disarmSkip() { skipArmed = 0; clearTimeout(skipTimer); const b = $('#btnSkip'); if (b) b.classList.remove('armed'); }
+  function skipBlock() {
+    if (!ride || !ride.run || ride.run.done) return;
+    if (Date.now() - skipArmed < 3000) {
+      disarmSkip(); ride.run.skip(); onStepChange(); updateHud();
+      R.toast(ride.run.done ? 'Entrenamiento terminado' : 'Siguiente bloque');
+      return;
+    }
+    skipArmed = Date.now(); $('#btnSkip').classList.add('armed');
+    skipTimer = setTimeout(disarmSkip, 3000);
+  }
+
+  /* Si el navegador ya deja libre la zona de la cámara (Bluefy), no añadimos otro margen */
+  function hostInsets() {
+    const longSide = Math.max(screen.width, screen.height), shortSide = Math.min(screen.width, screen.height);
+    const edge = window.innerWidth > window.innerHeight ? longSide : shortSide;
+    document.documentElement.classList.toggle('inset-host', window.innerWidth < edge - 4);
   }
 
   /* Minimapa: planta + perfil completo */
@@ -2417,7 +2466,8 @@ ${pts.join('\n')}
     $('#mErg').onchange = e => { ride.erg = e.target.checked; };
     const bias = d => { if (!ride || !ride.run) return; ride.run.bias = R.clamp(Math.round((ride.run.bias + d) * 100) / 100, 0.5, 1.5); $('#mBias').textContent = Math.round(ride.run.bias * 100) + ' %'; renderSteps(); prepProfile(); };
     $('#mBiasMinus').onclick = () => bias(-0.05); $('#mBiasPlus').onclick = () => bias(0.05);
-    $('#mSkip').onclick = () => { if (ride && ride.run) { ride.run.skip(); onStepChange(); } };
+    $('#mSkip').onclick = () => { if (ride && ride.run && !ride.run.done) { ride.run.skip(); onStepChange(); updateHud(); } };
+    $('#btnSkip').onclick = skipBlock;
     $('#mDiff').oninput = e => { set.difficulty = parseInt(e.target.value, 10); $('#mDiffV').textContent = set.difficulty + ' %'; saveSet(); };
     $('#mBeep').onchange = e => { set.beep = e.target.checked; R.audio.on = set.beep; saveSet(); };
     $('#eBack').onclick = () => { $('#endSheet').hidden = true; };
@@ -2439,7 +2489,8 @@ ${pts.join('\n')}
       if (e.code === 'Space') { e.preventDefault(); togglePause(); }
       if (e.key === 'c') R.toast('Cámara: ' + W.cycleCamera());
     });
-    window.addEventListener('resize', () => { if (ride) { setTimeout(() => { W.resize(); sizeHudCanvases(); prepMap(); prepProfile(); drawProfile(); }, 120); } });
+    hostInsets();
+    window.addEventListener('resize', () => { hostInsets(); nearRows = 7; if (ride) { setTimeout(() => { W.resize(); sizeHudCanvases(); prepMap(); prepProfile(); drawProfile(); }, 120); } });
     document.addEventListener('visibilitychange', () => { if (!document.hidden && ride && ride.running) R.wake.on(); });
     window.addEventListener('beforeunload', () => { if (ride && ride.running && ride.samples.p.length > 30) R.idb.put(snapshot('live')); });
 
