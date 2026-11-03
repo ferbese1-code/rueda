@@ -10,7 +10,7 @@ OUT.mkdir(exist_ok=True)
 THREE = '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>'
 FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
          '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Saira:wght@400;500;600&display=swap">')
-JS_ORDER = ["util.js", "ble.js", "routes.js", "sim.js", "world.js", "workouts.js", "data.js", "app.js"]
+JS_ORDER = ["util.js", "ble.js", "routes.js", "sim.js", "world.js", "workouts.js", "plan.js", "data.js", "app.js"]
 
 css = (SRC / "styles.css").read_text()
 body = (SRC / "body.html").read_text()

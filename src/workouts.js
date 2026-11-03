@@ -12,8 +12,6 @@
   for (let w = 120; w <= 600; w += 20) rampTest.push(ssW(60, w));
 
   R.BUILTIN_WORKOUTS = [
-    { id: 'z23cv', name: 'Z2/3 · Cambios de ritmo', desc: 'Bloques de 3′ en Z2 y 3′ en Z3 con 1′ suave', steps: [ramp(300, 0.45, 0.65), rep(6, [ss(180, 0.70), ss(180, 0.83), ss(60, 0.47)]), ramp(240, 0.60, 0.40)] },
-    { id: 'pam6', name: 'PAM · 6 × 2′30″', desc: 'Seis intervalos por encima del umbral', steps: [ss(300, 0.49), ss(600, 0.66), rep(2, [ss(60, 0.87), ss(120, 0.55)]), rep(6, [ss(150, 1.085), ss(120, 0.49)]), ss(300, 0.66), ramp(300, 0.55, 0.40)] },
     { id: 'vo2130', name: 'VO2 · 130 % FTP', desc: 'Tres series progresivas: 20/40, 30/30, 40/20, 50/10 y 60″', steps: [ramp(600, 0.40, 0.65), ss(120, 0.40), rep(3, [ss(20, 1.3), ss(40, 0.3), ss(30, 1.3), ss(30, 0.3), ss(40, 1.3), ss(20, 0.3), ss(50, 1.3), ss(10, 0.3), ss(60, 1.3), ss(300, 0.40)])] },
     { id: 'ss3x12', name: 'Sweet spot · 3 × 12′', desc: 'Tres bloques al 90 % con 5′ de recuperación', steps: [ramp(600, 0.45, 0.70), rep(3, [ss(720, 0.90), ss(300, 0.55)]), ramp(300, 0.55, 0.40)] },
     { id: 'z2-60', name: 'Fondo Z2 · 60′', desc: 'Una hora continua en zona 2', steps: [ramp(300, 0.45, 0.65), ss(3000, 0.68), ramp(300, 0.60, 0.40)] },
@@ -149,5 +147,12 @@
     throw new Error('Formato no reconocido. Usa .zwo, .erg o .mrc');
   };
 
-  R.allWorkouts = () => R.BUILTIN_WORKOUTS.concat(R.store.get('customWorkouts', []));
+  /* Entrenamientos del plan (semana › día), con su semana y día para mostrarlos ordenados */
+  R.planWorkouts = () => {
+    const out = [], P = R.PLAN;
+    if (!P) return out;
+    P.weeks.forEach(wk => wk.days.forEach(d => d.workouts.forEach(w => out.push({ ...w, plan: true, week: wk.n, weekName: wk.name, day: d.day, desc: `Semana ${wk.n} · ${d.day}` }))));
+    return out;
+  };
+  R.allWorkouts = () => R.planWorkouts().concat(R.BUILTIN_WORKOUTS, R.store.get('customWorkouts', []));
 })();

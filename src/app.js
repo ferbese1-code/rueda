@@ -11,7 +11,7 @@
   const trainer = () => (demo ? dev.sim : dev.trainer);
 
   let selMode = R.store.get('mode', 'workout');
-  let selWorkout = R.store.get('workout', 'z23cv');
+  let selWorkout = R.store.get('workout', null);
   let selRoute = R.store.get('route', 'foia');
 
   /* ---------- Datos en vivo ---------- */
@@ -89,22 +89,67 @@
     x.fillStyle = g; x.fill();
   }
 
-  function renderWorkouts() {
-    const box = $('#workoutList'); box.innerHTML = '';
-    R.allWorkouts().forEach(w => {
-      const st = R.workoutStats(w, set.ftp);
-      const c = document.createElement('button'); c.type = 'button'; c.className = 'card' + (w.id === selWorkout ? ' sel' : '');
-      c.innerHTML = `<h3>${R.esc(w.name)}</h3><p>${R.esc(w.desc || '')}</p><canvas></canvas><div class="meta"><span>${Math.round(st.dur / 60)}<i>min</i></span><span>${st.tss}<i>TSS</i></span><span>${st.steps}<i>bloques</i></span></div>${w.custom ? '<span class="del" role="button" aria-label="Borrar entrenamiento">×</span>' : ''}`;
-      c.addEventListener('click', e => {
-        if (e.target.classList.contains('del')) {
-          if (c.dataset.confirm) { R.store.set('customWorkouts', R.store.get('customWorkouts', []).filter(x => x.id !== w.id)); if (selWorkout === w.id) selWorkout = 'z23cv'; renderWorkouts(); }
-          else { c.dataset.confirm = '1'; e.target.textContent = '¿Borrar?'; setTimeout(() => { delete c.dataset.confirm; e.target.textContent = '×'; }, 2500); }
-          return;
-        }
-        selWorkout = w.id; R.store.set('workout', w.id); renderWorkouts();
-      });
-      box.appendChild(c); drawWorkoutThumb(c.querySelector('canvas'), w);
+  /* Lista de entrenamientos: tu plan por semanas y días, y debajo los demás (incorporados e importados) */
+  let selWeek = R.store.get('planWeek', null);
+  function workoutCard(w, eyebrow) {
+    const st = R.workoutStats(w, set.ftp);
+    const c = document.createElement('button'); c.type = 'button'; c.className = 'card' + (w.id === selWorkout ? ' sel' : ''); c._w = w;
+    c.innerHTML = `${eyebrow ? `<span class="eyebrow">${R.esc(eyebrow)}</span>` : ''}<h3>${R.esc(w.name)}</h3>${!eyebrow && w.desc ? `<p>${R.esc(w.desc)}</p>` : ''}<canvas></canvas><div class="meta"><span>${Math.round(st.dur / 60)}<i>min</i></span><span>${st.tss}<i>TSS</i></span><span>${st.steps}<i>bloques</i></span></div>${w.custom ? '<span class="del" role="button" aria-label="Borrar entrenamiento">×</span>' : ''}`;
+    c.addEventListener('click', e => {
+      if (e.target.classList.contains('del')) {
+        if (c.dataset.confirm) { R.store.set('customWorkouts', R.store.get('customWorkouts', []).filter(x => x.id !== w.id)); if (selWorkout === w.id) selWorkout = null; renderWorkouts(); }
+        else { c.dataset.confirm = '1'; e.target.textContent = '¿Borrar?'; setTimeout(() => { delete c.dataset.confirm; e.target.textContent = '×'; }, 2500); }
+        return;
+      }
+      selWorkout = w.id; R.store.set('workout', w.id); renderWorkouts();
     });
+    return c;
+  }
+  function renderWorkouts() {
+    const box = $('#workoutList'), all = R.allWorkouts(), P = R.PLAN;
+    if (!all.some(w => w.id === selWorkout)) selWorkout = (all.find(w => w.plan) || all[0]).id;
+    const cur = all.find(w => w.id === selWorkout);
+    if (P && P.weeks.length) {
+      if (!P.weeks.some(wk => wk.n === selWeek)) selWeek = cur && cur.plan ? cur.week : P.weeks[0].n;
+    }
+    const wasOpen = !!(box.querySelector('details.others') || {}).open || (cur && !cur.plan);
+    box.innerHTML = '';
+    const plan = document.createElement('div'); plan.className = 'planbox';
+    if (P && P.weeks.length) {
+      const chips = document.createElement('div'); chips.className = 'weeks'; chips.setAttribute('role', 'tablist');
+      P.weeks.forEach(wk => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'chip' + (wk.n === selWeek ? ' on' : '');
+        b.innerHTML = `<b>S${wk.n}</b>${R.esc(wk.name)}`;
+        b.addEventListener('click', () => { selWeek = wk.n; R.store.set('planWeek', wk.n); renderWorkouts(); });
+        chips.appendChild(b);
+      });
+      plan.appendChild(chips);
+      const list = document.createElement('div'); list.className = 'list';
+      const wk = P.weeks.find(x => x.n === selWeek);
+      const planAll = R.planWorkouts();
+      wk.days.forEach(d => {
+        if (!d.workouts.length) {
+          const n = document.createElement('div'); n.className = 'card note';
+          n.innerHTML = `<span class="eyebrow">${R.esc(d.day)}</span><h3>${R.esc(d.note || 'Descanso')}</h3><p>${d.note ? 'Sin archivo: usa Ruta libre y controla el pulso.' : ''}</p>`;
+          list.appendChild(n); return;
+        }
+        d.workouts.forEach(x => { const w = planAll.find(p => p.id === x.id); const c = workoutCard(w, d.day); list.appendChild(c); });
+      });
+      plan.appendChild(list);
+      // Desplaza la fila de semanas hasta la elegida
+      setTimeout(() => { const on = chips.querySelector('.chip.on'); if (on) chips.scrollLeft = on.offsetLeft - 16; }, 0);
+    }
+    box.appendChild(plan);
+    const others = all.filter(w => !w.plan);
+    if (others.length) {
+      const det = document.createElement('details'); det.className = 'others'; det.open = wasOpen;
+      det.innerHTML = `<summary>Otros entrenamientos (${others.length})</summary>`;
+      const list = document.createElement('div'); list.className = 'list';
+      others.forEach(w => list.appendChild(workoutCard(w, '')));
+      det.appendChild(list); box.appendChild(det);
+      det.addEventListener('toggle', () => { if (det.open) R.$$('canvas', det).forEach(cv => drawWorkoutThumb(cv, cv.closest('.card')._w)); });
+    }
+    R.$$('.card canvas', box).forEach(cv => { const w = cv.closest('.card')._w; if (w) drawWorkoutThumb(cv, w); });
     renderStartInfo();
   }
   function renderRoutes() {
@@ -127,7 +172,7 @@
     const el = $('#startInfo'); if (!el) return;
     const r = R.ROUTES_DEF.find(x => x.id === selRoute);
     let txt = '';
-    if (selMode === 'workout') { const w = R.allWorkouts().find(x => x.id === selWorkout); if (w) txt = `${w.name} · ${Math.round(R.workoutStats(w, set.ftp).dur / 60)} min · `; }
+    if (selMode === 'workout') { const w = R.allWorkouts().find(x => x.id === selWorkout); if (w) txt = `${w.plan ? `S${w.week} ${w.day} · ` : ''}${w.name} · ${Math.round(R.workoutStats(w, set.ftp).dur / 60)} min · `; }
     txt += r ? r.name : '';
     if (trainer().status !== 'on') txt = 'Conecta el rodillo o activa el modo prueba';
     el.textContent = txt;
