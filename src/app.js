@@ -703,6 +703,19 @@
     $('#mBiasMinus').onclick = () => bias(-0.05); $('#mBiasPlus').onclick = () => bias(0.05);
     $('#mSkip').onclick = () => { if (ride && ride.run && !ride.run.done) { ride.run.skip(); onStepChange(); updateHud(); } };
     $('#btnSkip').onclick = skipBlock;
+    /* Pantalla completa donde el navegador la permite (Chrome en Android; en iPhone se usa la de Bluefy) */
+    const fsOK = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+    const fsOn = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+    $('#mFsRow').hidden = !fsOK;
+    $('#mFs').onclick = async () => {
+      const el = document.documentElement;
+      try {
+        if (fsOn()) await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+        else await (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+      } catch (e) { R.toast('Este navegador no permite pantalla completa', 'bad'); }
+      $('#rideMenu').hidden = true;
+    };
+    ['fullscreenchange', 'webkitfullscreenchange'].forEach(n => document.addEventListener(n, () => { $('#mFs').textContent = fsOn() ? 'Salir' : 'Activar'; }));
     $('#mDiff').oninput = e => { set.difficulty = parseInt(e.target.value, 10); $('#mDiffV').textContent = set.difficulty + ' %'; saveSet(); };
     $('#mBeep').onchange = e => { set.beep = e.target.checked; R.audio.on = set.beep; saveSet(); };
     $('#eBack').onclick = () => { $('#endSheet').hidden = true; };

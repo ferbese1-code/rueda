@@ -116,12 +116,15 @@ R.cacheZoneColors = () => { for (let i = 1; i <= 6; i++) R.ZC[i] = getComputedSt
 R.zc = f => R.ZC[R.zone(f)] || '#888';
 
 /* Mantener la pantalla encendida */
+/* Bluefy tiene su propia orden para que el iPhone no apague la pantalla */
+const bluefyDim = on => { try { const b = navigator.bluetooth; if (b && typeof b.setScreenDimEnabled === 'function') Promise.resolve(b.setScreenDimEnabled(on)).catch(() => {}); } catch (e) { /* no es Bluefy */ } };
 R.wake = {
   lock: null,
   async on() {
+    bluefyDim(false);
     try { if ('wakeLock' in navigator) { this.lock = await navigator.wakeLock.request('screen'); } } catch (e) { /* no disponible */ }
   },
-  off() { try { this.lock && this.lock.release(); } catch (e) { /* nada */ } this.lock = null; }
+  off() { bluefyDim(true); try { this.lock && this.lock.release(); } catch (e) { /* nada */ } this.lock = null; }
 };
 
 /* Guardar/compartir un fichero (TCX) */

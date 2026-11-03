@@ -391,6 +391,7 @@ h1 { font-family: var(--num); font-weight: 800; font-style: italic; font-size: 3
       <div class="mrow" id="mBiasRow"><span>Intensidad</span><div class="stepper"><button type="button" id="mBiasMinus">−5 %</button><b id="mBias">100 %</b><button type="button" id="mBiasPlus">+5 %</button></div></div>
       <div class="mrow" id="mSkipRow"><span>Bloque actual</span><button type="button" id="mSkip">Saltar bloque</button></div>
       <div class="mrow"><span>Dificultad del rodillo en ruta</span><div class="range"><input type="range" id="mDiff" min="0" max="100" step="5"><b id="mDiffV">50 %</b></div></div>
+      <div class="mrow" id="mFsRow" hidden><span>Pantalla completa</span><button type="button" id="mFs">Activar</button></div>
       <div class="mrow"><span>Pitidos en los cambios</span><label class="switch"><input type="checkbox" id="mBeep" checked><span></span></label></div>
       <div class="mactions">
         <button type="button" class="ghost" id="mClose">Seguir</button>
@@ -584,12 +585,15 @@ R.cacheZoneColors = () => { for (let i = 1; i <= 6; i++) R.ZC[i] = getComputedSt
 R.zc = f => R.ZC[R.zone(f)] || '#888';
 
 /* Mantener la pantalla encendida */
+/* Bluefy tiene su propia orden para que el iPhone no apague la pantalla */
+const bluefyDim = on => { try { const b = navigator.bluetooth; if (b && typeof b.setScreenDimEnabled === 'function') Promise.resolve(b.setScreenDimEnabled(on)).catch(() => {}); } catch (e) { /* no es Bluefy */ } };
 R.wake = {
   lock: null,
   async on() {
+    bluefyDim(false);
     try { if ('wakeLock' in navigator) { this.lock = await navigator.wakeLock.request('screen'); } } catch (e) { /* no disponible */ }
   },
-  off() { try { this.lock && this.lock.release(); } catch (e) { /* nada */ } this.lock = null; }
+  off() { bluefyDim(true); try { this.lock && this.lock.release(); } catch (e) { /* nada */ } this.lock = null; }
 };
 
 /* Guardar/compartir un fichero (TCX) */
@@ -2468,6 +2472,19 @@ ${pts.join('\n')}
     $('#mBiasMinus').onclick = () => bias(-0.05); $('#mBiasPlus').onclick = () => bias(0.05);
     $('#mSkip').onclick = () => { if (ride && ride.run && !ride.run.done) { ride.run.skip(); onStepChange(); updateHud(); } };
     $('#btnSkip').onclick = skipBlock;
+    /* Pantalla completa donde el navegador la permite (Chrome en Android; en iPhone se usa la de Bluefy) */
+    const fsOK = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+    const fsOn = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+    $('#mFsRow').hidden = !fsOK;
+    $('#mFs').onclick = async () => {
+      const el = document.documentElement;
+      try {
+        if (fsOn()) await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+        else await (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+      } catch (e) { R.toast('Este navegador no permite pantalla completa', 'bad'); }
+      $('#rideMenu').hidden = true;
+    };
+    ['fullscreenchange', 'webkitfullscreenchange'].forEach(n => document.addEventListener(n, () => { $('#mFs').textContent = fsOn() ? 'Salir' : 'Activar'; }));
     $('#mDiff').oninput = e => { set.difficulty = parseInt(e.target.value, 10); $('#mDiffV').textContent = set.difficulty + ' %'; saveSet(); };
     $('#mBeep').onchange = e => { set.beep = e.target.checked; R.audio.on = set.beep; saveSet(); };
     $('#eBack').onclick = () => { $('#endSheet').hidden = true; };
