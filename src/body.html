@@ -69,12 +69,6 @@
       <div class="pcore">
         <div class="target" id="hTarget"><span class="tl">Pedalea a</span><span class="tw"><b id="hTargetW">—</b>W</span><span class="td" id="hTargetD"></span></div>
         <div class="power"><b id="hPower">0</b><i>W</i></div>
-        <ul class="side">
-          <li><b id="hCad">0</b><i>rpm</i></li>
-          <li><b id="hAvg">0</b><i>W med</i></li>
-          <li><b id="hHr">—</b><i>ppm</i></li>
-          <li><b id="hKcal">0</b><i>kcal</i></li>
-        </ul>
       </div>
       <div class="stepbar"><div id="hStepFill"></div><span id="hStepLeft"></span></div>
     </div>
@@ -86,16 +80,10 @@
       <div class="wcount" id="hStepCount"></div>
     </div>
 
-    <div class="pright">
-      <div class="plate pmap">
-        <canvas id="hMap" width="320" height="200"></canvas>
-        <div class="grade" id="hGrade">0 %</div>
-        <div class="rname" id="hRoute"></div>
-      </div>
-      <div class="plate pnear">
-        <div class="ntitle">Cerca · w/kg</div>
-        <ol id="hNear"></ol>
-      </div>
+    <div class="plate pstats" id="hStats">
+      <div class="bigstat"><b id="hCad">0</b><i>rpm</i></div>
+      <div class="bigstat"><b id="hAvg">0</b><i>W med</i></div>
+      <div class="bigstat"><b id="hHr">—</b><i>ppm</i></div>
     </div>
 
     <canvas id="hProfile" class="pprofile" width="1200" height="90"></canvas>
@@ -106,7 +94,6 @@
     <div class="pctl">
       <button type="button" class="round" id="btnPause" aria-label="Pausa">❚❚</button>
       <button type="button" class="round skip" id="btnSkip" aria-label="Siguiente bloque" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.5v13l7.5-6.5zM10.5 5.5v13L18 12z"/><rect x="18.4" y="5.5" width="2.4" height="13" rx="1" fill="currentColor"/></svg><span>Toca otra vez para saltar</span></button>
-      <button type="button" class="round" id="btnCam" aria-label="Cambiar cámara">◉</button>
       <button type="button" class="round" id="btnMenu" aria-label="Menú">☰</button>
       <span class="devdots" id="hDevs"></span>
     </div>
@@ -176,6 +163,7 @@
       <label class="field"><span>Potencia que se registra</span><select id="fSource"><option value="trainer">La del rodillo</option><option value="pm">La del potenciómetro</option></select></label>
       <label class="field"><span>Igualar potencia en ERG (con potenciómetro)</span><select id="fMatch"><option value="1">Sí</option><option value="0">No</option></select></label>
       <label class="field"><span>Dificultad en ruta</span><select id="fDiff"><option value="25">25 %</option><option value="50">50 % (como Zwift)</option><option value="75">75 %</option><option value="100">100 % (pendiente real)</option></select></label>
+      <label class="field"><span>Otros ciclistas en la carretera</span><select id="fBots"><option value="0">No</option><option value="1">Sí</option></select></label>
       <label class="field"><span>Calidad gráfica</span><select id="fQuality"><option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja (ahorra batería)</option></select></label>
     </div>
     <h4 class="label">Strava</h4>

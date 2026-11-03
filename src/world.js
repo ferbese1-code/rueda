@@ -23,7 +23,9 @@
   const OFFS = [-1200, -700, -400, -260, -140, -70, -30, -14, -6, 6, 14, 30, 70, 140, 260, 400, 700, 1200];
 
   let renderer, scene, camera, sky, routeGroup, route, theme, quality = 'alta';
-  let camPos = null, camMode = 0;
+  let camPos = null;
+  const FOV = 58, AHEAD = 8, camH = D => 1.0 + 0.2 * D;
+  let fitD = 4.8, frame = null; // zona libre (px desde arriba) donde debe quedar el ciclista entero
   const riders = new Map();
   const UP = new THREE.Vector3(0, 1, 0);
   const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
@@ -45,9 +47,33 @@
   W.resize = () => {
     if (!renderer) return;
     const c = renderer.domElement, w = c.clientWidth || window.innerWidth, h = c.clientHeight || window.innerHeight;
-    renderer.setSize(w, h, false); camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix();
+    renderer.setSize(w, h, false); fitCamera();
   };
-  W.cycleCamera = () => { camMode = (camMode + 1) % 4; camPos = null; return ['Persecución', 'Cerca', 'Lateral', 'Primera persona'][camMode]; };
+  W.setFrame = (top, bottom) => { frame = { top, bottom }; fitCamera(); };
+
+  /* Elige la distancia de la cámara para que el ciclista ocupe el hueco libre y lo coloca ahí con un
+     desplazamiento de óptica (la carretera no se inclina). */
+  function fitCamera() {
+    if (!renderer) return;
+    const c = renderer.domElement, w = c.clientWidth || window.innerWidth, h = Math.max(1, c.clientHeight || window.innerHeight);
+    camera.fov = FOV; camera.aspect = w / h; camera.clearViewOffset();
+    if (!frame || frame.bottom - frame.top < 50) { fitD = 4.8; camera.updateProjectionMatrix(); return; }
+    const cam = new THREE.PerspectiveCamera(FOV, w / h, 0.3, 100), head = new THREE.Vector3(), foot = new THREE.Vector3();
+    const want = (frame.bottom - frame.top) * 0.82;
+    let best = null;
+    for (let D = 2.6; D <= 16; D += 0.2) {
+      cam.position.set(-D, camH(D), 0); cam.lookAt(AHEAD, 1.0, 0); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
+      head.set(0.42, 1.6, 0).project(cam); foot.set(-0.8, 0, 0).project(cam);
+      const hy = (1 - head.y) / 2 * h, fy = (1 - foot.y) / 2 * h, err = Math.abs(fy - hy - want);
+      if (!best || err < best.err) best = { D, err, hy, fy };
+    }
+    fitD = best.D;
+    const s = R.clamp((frame.top + frame.bottom) / 2 - (best.hy + best.fy) / 2, -0.45 * h, 0.45 * h), a = Math.abs(s), full = h + 2 * a;
+    camera.fov = 2 * Math.atan(Math.tan(FOV * Math.PI / 360) * full / h) * 180 / Math.PI;
+    camera.aspect = w / full;
+    camera.setViewOffset(w, full, 0, s >= 0 ? 0 : 2 * a, w, h);
+    camera.updateProjectionMatrix();
+  }
 
   function noise(d, off, s) {
     return 0.5 + 0.25 * Math.sin(d / 310 + off / 170 + s) + 0.15 * Math.sin(d / 97 - off / 53 + s * 2.1) + 0.1 * Math.sin(d / 41 + off / 29 + s * 3.7);
@@ -325,24 +351,10 @@
       r.group.visible = vis;
       if (vis) { placeRider(r, b.d, b.lane, b.crank, b.wheel); if (r.tag) r.tag.visible = Math.abs(gap) < 60 && Math.abs(gap) > 2; }
     });
-    const portrait = camera.aspect < 1, k = portrait ? 1.7 : 1;
-    const cfg = [[4.8 * k, 2.0 * (portrait ? 1.35 : 1), 8], [2.9 * k, 1.5 * (portrait ? 1.2 : 1), 6], [0, 2.4, 0], [0, 0, 0]][camMode];
-    const lane = player.lane;
-    let px, py, pz, lx, ly, lz;
-    if (camMode === 2) {
-      const s = route.at(player.d + 1.5), side = 7;
-      px = s.x - s.tz * (lane + side); py = s.y + cfg[1]; pz = s.z + s.tx * (lane + side);
-      const t = route.at(player.d + 0.6); lx = t.x - t.tz * lane; ly = t.y + 0.9; lz = t.z + t.tx * lane;
-    } else if (camMode === 3) {
-      const s = route.at(player.d + 0.45); px = s.x - s.tz * lane; py = s.y + 1.62; pz = s.z + s.tx * lane;
-      const t = route.at(player.d + 22); lx = t.x - t.tz * lane; ly = t.y + 1.3; lz = t.z + t.tx * lane;
-    } else {
-      const s = route.at(player.d - cfg[0]); px = s.x - s.tz * lane; py = s.y + cfg[1]; pz = s.z + s.tx * lane;
-      const t = route.at(player.d + cfg[2]); lx = t.x - t.tz * lane; ly = t.y + 1.0; lz = t.z + t.tx * lane;
-    }
-    tmpV2.set(px, py, pz);
-    if (!camPos) camPos = tmpV2.clone(); else camPos.lerp(tmpV2, camMode === 3 ? 1 : 1 - Math.exp(-dt * 6));
-    camera.position.copy(camPos); camera.lookAt(lx, ly, lz);
+    const lane = player.lane, s = route.at(player.d - fitD), t = route.at(player.d + AHEAD);
+    tmpV2.set(s.x - s.tz * lane, s.y + camH(fitD), s.z + s.tx * lane);
+    if (!camPos) camPos = tmpV2.clone(); else camPos.lerp(tmpV2, 1 - Math.exp(-dt * 6));
+    camera.position.copy(camPos); camera.lookAt(t.x - t.tz * lane, t.y + 1.0, t.z + t.tx * lane);
     if (sky) sky.position.copy(camera.position);
     renderer.render(scene, camera);
   };

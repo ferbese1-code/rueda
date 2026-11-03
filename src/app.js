@@ -2,7 +2,7 @@
 /* Pantallas, bucle principal, HUD, resumen, ajustes e historial */
 (function () {
   const R = window.R, $ = R.$, W = R.world;
-  const DEF = { name: 'Fernando', ftp: 235, weight: 62, bike: 8, jersey: '#ff7a1a', difficulty: 50, powerSource: 'trainer', powerMatch: true, quality: 'alta', beep: true };
+  const DEF = { name: 'Fernando', ftp: 235, weight: 62, bike: 8, jersey: '#ff7a1a', difficulty: 50, powerSource: 'trainer', powerMatch: true, quality: 'alta', beep: true, bots: false };
   let set = { ...DEF, ...R.store.get('settings', {}) };
   const saveSet = () => R.store.set('settings', set);
 
@@ -39,7 +39,7 @@
     return {
       running: true, paused: false, route, run: wdef ? new R.WorkoutRun(wdef) : null, wdef,
       player: { d: 0, v: 0, mass: set.weight + set.bike, lane: 1.8, crank: 0, wheel: 0, jersey: set.jersey },
-      bots: new R.Bots(10, (Date.now() & 0xffff) + 1),
+      bots: new R.Bots(set.bots ? 10 : 0, (Date.now() & 0xffff) + 1),
       elapsed: 0, lastSec: -1, gain: 0, kj: 0, sumP: 0, n: 0, accP: 0, accT: 0,
       pEma: 0, cad: 0, hr: 0, erg: true, pmRatio: 1, start: Date.now(), samples: R.newSamples(),
       lastLeftSec: null, savedAt: 0
@@ -159,13 +159,15 @@
     W.buildRoute(ride.route);
     ride.bots.place(ride.route, 0, (set.ftp * 0.62) / set.weight);
     W.syncRiders(ride.player, ride.bots);
-    W.resize(); sizeHudCanvases(); prepMap(); prepProfile();
     if (demo) dev.sim.resting = false;
-    $('#hRoute').textContent = ride.route.name;
     $('#hWork').hidden = !ride.run;
-    $('#btnSkip').hidden = !ride.run; $('.hud').classList.toggle('work', !!ride.run); disarmSkip(); nearRows = 7;
+    $('#btnSkip').hidden = !ride.run; $('.hud').classList.toggle('work', !!ride.run); disarmSkip();
     $('#mErgRow').hidden = $('#mBiasRow').hidden = $('#mSkipRow').hidden = !ride.run;
-    if (ride.run) { $('#hWorkName').textContent = ride.wdef.name; renderSteps(); }
+    stepsTouched = 0;
+    if (ride.run) { $('#hWorkName').textContent = ride.wdef.name; renderSteps(true); }
+    updateHud();
+    W.resize(); sizeHudCanvases(); prepProfile(); frameRider();
+    setTimeout(frameRider, 600); // cuando terminan de cargar las fuentes
     $('#hPaused').hidden = true;
     R.wake.on();
     lastFrame = performance.now();
@@ -259,22 +261,46 @@
   const run_isDone = () => !ride.run || ride.run.done;
 
   /* ---------- HUD ---------- */
-  function renderSteps() {
-    const run = ride.run, ol = $('#hSteps'); ol.innerHTML = '';
-    if (!run) return;
-    const from = Math.max(0, run.idx - 2), to = Math.min(run.steps.length, from + 11);
-    for (let i = from; i < to; i++) {
-      const s = run.steps[i], li = document.createElement('li');
-      const w = R.stepWatts(s, set.ftp, run.bias, 0), w2 = R.stepWatts(s, set.ftp, run.bias, 1);
-      const f = s.free ? 0.5 : ((w + w2) / 2) / set.ftp;
-      li.style.setProperty('--zc', s.free ? '#55606b' : R.zc(f));
-      li.textContent = s.free ? `${R.fmtStepDur(s.dur)} libre` : `${R.fmtStepDur(s.dur)} @ ${w === w2 ? w : w + '–' + w2}W`;
-      if (i < run.idx || run.done) li.className = 'done'; else if (i === run.idx) li.className = 'cur';
-      ol.appendChild(li);
+  /* Lista de bloques: se crea entera una vez; luego solo se marcan el actual y los hechos.
+     Si la mueves con el dedo, tarda 10 s en volver sola al bloque actual. */
+  let stepsTouched = 0;
+  function renderSteps(rebuild) {
+    const run = ride && ride.run, ol = $('#hSteps');
+    if (!run) { ol.innerHTML = ''; return; }
+    if (rebuild || ol.children.length !== run.steps.length) {
+      const keep = ol.scrollTop;
+      ol.innerHTML = run.steps.map(s => {
+        const w = R.stepWatts(s, set.ftp, run.bias, 0), w2 = R.stepWatts(s, set.ftp, run.bias, 1);
+        const col = s.free ? '#55606b' : R.zc(((w + w2) / 2) / set.ftp);
+        const txt = s.free ? `${R.fmtStepDur(s.dur)} libre` : `${R.fmtStepDur(s.dur)} @ ${w === w2 ? w : w + '–' + w2}W`;
+        return `<li style="--zc:${col}">${txt}</li>`;
+      }).join('');
+      ol.scrollTop = keep;
     }
-    const rest = run.steps.length - to;
-    if (rest > 0) { const li = document.createElement('li'); li.style.setProperty('--zc', 'transparent'); li.textContent = `+${rest} más`; ol.appendChild(li); }
+    Array.from(ol.children).forEach((li, i) => { li.className = run.done || i < run.idx ? 'done' : i === run.idx ? 'cur' : ''; });
     $('#hStepCount').textContent = run.done ? 'Entrenamiento completado' : `Bloque ${run.idx + 1} de ${run.steps.length}`;
+    followSteps(Date.now() - stepsTouched > 2500);
+  }
+  function followSteps(force) {
+    const run = ride && ride.run, ol = $('#hSteps');
+    if (!run || run.done || (!force && Date.now() - stepsTouched < 10000)) return;
+    const cur = ol.children[run.idx]; if (!cur) return;
+    const prev = cur.previousElementSibling, target = Math.max(0, cur.offsetTop - (prev ? prev.offsetHeight + 3 : 0));
+    if (Math.abs(ol.scrollTop - target) > 2) ol.scrollTop = target;
+  }
+
+  /* Hueco libre entre los paneles donde se coloca al ciclista */
+  function frameRider() {
+    if (!ride) return;
+    const cv = $('#gl').getBoundingClientRect(), cx = cv.left + cv.width / 2;
+    const top = $('.pmain').getBoundingClientRect().bottom - cv.top + 6;
+    let bottom = cv.height - 6;
+    ['.pwork', '.pstats', '.pctl', '.pprofile'].forEach(sel => {
+      const el = $(sel); if (!el || el.offsetParent === null || getComputedStyle(el).display === 'none') return;
+      const r = el.getBoundingClientRect();
+      if (r.width && r.left < cx + 45 && r.right > cx - 45 && r.top - cv.top > top) bottom = Math.min(bottom, r.top - cv.top - 4);
+    });
+    W.setFrame(top, bottom);
   }
 
   function gradeColor(g) { return g > 8 ? '#ff6b6b' : g > 5 ? '#ff9f43' : g > 2 ? '#ffd43b' : g < -2 ? '#74c0fc' : '#ffffff'; }
@@ -290,9 +316,7 @@
     $('#hCad').textContent = Math.round(rd.cad);
     $('#hAvg').textContent = rd.n ? Math.round(rd.sumP / rd.n) : 0;
     $('#hHr').textContent = rd.hr ? Math.round(rd.hr) : '—';
-    $('#hKcal').textContent = Math.round(rd.kj);
-    const grade = rd.route.grade(p.d), gEl = $('#hGrade');
-    gEl.textContent = `${grade >= 0 ? '' : '−'}${R.fmtNum(Math.abs(grade), 1)} %`; gEl.style.color = gradeColor(grade);
+    const grade = rd.route.grade(p.d);
     const tBox = $('#hTarget'), fill = $('#hStepFill');
     const s = run && !run.done ? run.cur() : null;
     if (s && !s.free) {
@@ -326,33 +350,10 @@
     } else ban.hidden = true;
     $('#hDraft').hidden = !rd.bots.draftFor(p) || p.v < 3;
     $('#btnSkip').hidden = !run || run.done;
-    renderNear(); drawMap();
+    followSteps(false);
     // Sensores
     const dots = [trainer(), dev.hrm.status !== 'off' ? dev.hrm : null, dev.pm.status !== 'off' ? dev.pm : null].filter(Boolean);
     $('#hDevs').innerHTML = dots.map(d => `<i class="${d.fresh() ? '' : 'bad'}" title="${R.esc(d.label)}"></i>`).join('');
-  }
-
-  /* Ciclistas cerca: tantas filas como quepan, siempre contigo en medio */
-  let nearRows = 7;
-  function renderNear() {
-    const box = $('#hNear'), panel = $('.pnear');
-    if (!panel || panel.offsetParent === null) return; // oculto en vertical
-    const rd = ride, p = rd.player, v = Math.max(p.v, 4);
-    const all = rd.bots.nearest(p, 12).map(o => ({ name: o.b.name, flag: o.b.flag, gap: o.gap, wkg: o.b.power / o.b.kg }));
-    const ahead = all.filter(o => o.gap > 0).sort((a, b) => a.gap - b.gap), behind = all.filter(o => o.gap <= 0).sort((a, b) => b.gap - a.gap);
-    const me = { me: true, name: set.name || 'Tú', gap: 0, wkg: rd.pEma / set.weight };
-    const row = o => {
-      const g = o.me ? '' : `${o.gap > 0 ? '−' : '+'}${R.fmtTime(Math.abs(o.gap) / v)}`;
-      return `<li class="${o.me ? 'me' : ''}"><span class="g">${g}</span><span class="n">${R.esc(o.name)}</span><span class="w">${R.fmtNum(o.wkg, 1)}${o.flag ? ' ' + o.flag : ''}</span></li>`;
-    };
-    for (let tries = 0; tries < 6; tries++) {
-      const others = nearRows - 1;
-      let nA = Math.min(ahead.length, Math.floor(others / 2)), nB = Math.min(behind.length, others - nA);
-      nA = Math.min(ahead.length, others - nB);
-      box.innerHTML = ahead.slice(0, nA).reverse().concat([me], behind.slice(0, nB)).map(row).join('');
-      if (panel.scrollHeight <= panel.clientHeight + 1 || nearRows <= 3) break;
-      nearRows--;
-    }
   }
 
   /* Botón de siguiente bloque: un toque lo prepara, el segundo salta (evita saltos sin querer) */
@@ -376,43 +377,9 @@
     document.documentElement.classList.toggle('inset-host', window.innerWidth < edge - 4);
   }
 
-  /* Minimapa: planta + perfil completo */
-  let mapCache = null;
   function sizeHudCanvases() {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    [['#hMap'], ['#hProfile']].forEach(([sel]) => {
-      const c = $(sel); const w = c.clientWidth, h = c.clientHeight;
-      if (w && h) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
-    });
-  }
-  function prepMap() {
-    const c = $('#hMap'), r = ride.route, W2 = c.width, H = c.height, planH = H * 0.66;
-    const off = document.createElement('canvas'); off.width = W2; off.height = H; const x = off.getContext('2d');
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    for (let i = 0; i < r.N; i += 20) { minX = Math.min(minX, r.x[i]); maxX = Math.max(maxX, r.x[i]); minZ = Math.min(minZ, r.z[i]); maxZ = Math.max(maxZ, r.z[i]); }
-    const pad = 10 * (W2 / 320), sc = Math.min((W2 - 2 * pad) / (maxX - minX), (planH - 2 * pad) / (maxZ - minZ));
-    const ox = (W2 - (maxX - minX) * sc) / 2, oz = (planH - (maxZ - minZ) * sc) / 2;
-    const P = (px, pz) => [ox + (px - minX) * sc, oz + (pz - minZ) * sc];
-    x.fillStyle = 'rgba(70,110,60,.35)'; x.fillRect(0, 0, W2, planH);
-    x.lineWidth = 3 * (W2 / 320); x.strokeStyle = 'rgba(255,255,255,.85)'; x.lineJoin = 'round'; x.beginPath();
-    for (let i = 0; i <= r.N; i += 10) { const k = i % r.N; const [a, b] = P(r.x[k], r.z[k]); i ? x.lineTo(a, b) : x.moveTo(a, b); }
-    x.closePath(); x.stroke();
-    // Perfil
-    const lo = r.minY - 5, hi = Math.max(r.maxY, lo + 50), ph = H - planH;
-    x.beginPath(); x.moveTo(0, H);
-    for (let i = 0; i <= 200; i++) { const d = (i / 200) * r.len; x.lineTo((i / 200) * W2, H - ((r.elev(d) - lo) / (hi - lo)) * (ph - 6)); }
-    x.lineTo(W2, H); x.closePath(); x.fillStyle = 'rgba(60,196,106,.75)'; x.fill();
-    mapCache = { img: off, P, planH, lo, hi, ph };
-  }
-  function drawMap() {
-    if (!mapCache) return;
-    const c = $('#hMap'), x = c.getContext('2d'), r = ride.route, k = c.width / 320;
-    x.clearRect(0, 0, c.width, c.height); x.drawImage(mapCache.img, 0, 0);
-    const dot = (d, col, rad) => { const s = r.at(d); const [a, b] = mapCache.P(s.x, s.z); x.beginPath(); x.arc(a, b, rad * k, 0, 6.29); x.fillStyle = col; x.fill(); };
-    ride.bots.list.forEach(b => { if (Math.abs(b.d - ride.player.d) < 1600) dot(b.d, 'rgba(255,255,255,.75)', 2.4); });
-    dot(ride.player.d, '#ffffff', 6); dot(ride.player.d, '#ffb22e', 4.2);
-    const fx = ((ride.player.d % r.len) / r.len) * c.width;
-    x.fillStyle = '#ffb22e'; x.fillRect(fx - 1.5 * k, mapCache.planH, 3 * k, c.height - mapCache.planH);
+    const dpr = Math.min(2, window.devicePixelRatio || 1), c = $('#hProfile'), w = c.clientWidth, h = c.clientHeight;
+    if (w && h) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
   }
 
   /* Perfil inferior: entrenamiento o próximos km de la ruta */
@@ -577,7 +544,7 @@
   /* ---------- Ajustes ---------- */
   function openSettings() {
     $('#fName').value = set.name; $('#fFtp').value = set.ftp; $('#fKg').value = set.weight; $('#fBike').value = set.bike; $('#fJersey').value = set.jersey;
-    $('#fSource').value = set.powerSource; $('#fMatch').value = set.powerMatch ? '1' : '0'; $('#fDiff').value = String(set.difficulty); $('#fQuality').value = set.quality;
+    $('#fSource').value = set.powerSource; $('#fMatch').value = set.powerMatch ? '1' : '0'; $('#fDiff').value = String(set.difficulty); $('#fQuality').value = set.quality; $('#fBots').value = set.bots ? '1' : '0';
     renderStrava(); $('#settings').hidden = false;
   }
   function bindSettings() {
@@ -589,6 +556,7 @@
     $('#fMatch').addEventListener('change', e => { set.powerMatch = e.target.value === '1'; saveSet(); });
     $('#fDiff').addEventListener('change', e => { set.difficulty = parseInt(e.target.value, 10); saveSet(); });
     $('#fQuality').addEventListener('change', e => { set.quality = e.target.value; saveSet(); });
+    $('#fBots').addEventListener('change', e => { set.bots = e.target.value === '1'; saveSet(); });
   }
   function renderStrava() {
     const S = R.strava, c = S.cfg(), box = $('#stravaBox'), host = location.hostname || 'tu-dominio';
@@ -693,13 +661,12 @@
     bindSettings();
     // Salida
     $('#btnPause').onclick = () => togglePause();
-    $('#btnCam').onclick = () => R.toast('Cámara: ' + W.cycleCamera());
-    $('#gl').addEventListener('click', () => { if (ride) R.toast('Cámara: ' + W.cycleCamera()); });
+    ['touchstart', 'pointerdown', 'wheel'].forEach(n => $('#hSteps').addEventListener(n, () => { stepsTouched = Date.now(); }, { passive: true }));
     $('#btnMenu').onclick = openMenu;
     $('#mClose').onclick = () => { $('#rideMenu').hidden = true; };
     $('#mEnd').onclick = askEnd;
     $('#mErg').onchange = e => { ride.erg = e.target.checked; };
-    const bias = d => { if (!ride || !ride.run) return; ride.run.bias = R.clamp(Math.round((ride.run.bias + d) * 100) / 100, 0.5, 1.5); $('#mBias').textContent = Math.round(ride.run.bias * 100) + ' %'; renderSteps(); prepProfile(); };
+    const bias = d => { if (!ride || !ride.run) return; ride.run.bias = R.clamp(Math.round((ride.run.bias + d) * 100) / 100, 0.5, 1.5); $('#mBias').textContent = Math.round(ride.run.bias * 100) + ' %'; renderSteps(true); prepProfile(); };
     $('#mBiasMinus').onclick = () => bias(-0.05); $('#mBiasPlus').onclick = () => bias(0.05);
     $('#mSkip').onclick = () => { if (ride && ride.run && !ride.run.done) { ride.run.skip(); onStepChange(); updateHud(); } };
     $('#btnSkip').onclick = skipBlock;
@@ -735,10 +702,9 @@
     document.addEventListener('keydown', e => {
       if (!ride || e.target.tagName === 'INPUT') return;
       if (e.code === 'Space') { e.preventDefault(); togglePause(); }
-      if (e.key === 'c') R.toast('Cámara: ' + W.cycleCamera());
     });
     hostInsets();
-    window.addEventListener('resize', () => { hostInsets(); nearRows = 7; if (ride) { setTimeout(() => { W.resize(); sizeHudCanvases(); prepMap(); prepProfile(); drawProfile(); }, 120); } });
+    window.addEventListener('resize', () => { hostInsets(); if (ride) { setTimeout(() => { W.resize(); sizeHudCanvases(); prepProfile(); drawProfile(); frameRider(); followSteps(true); }, 150); } });
     document.addEventListener('visibilitychange', () => { if (!document.hidden && ride && ride.running) R.wake.on(); });
     window.addEventListener('beforeunload', () => { if (ride && ride.running && ride.samples.p.length > 30) R.idb.put(snapshot('live')); });
 
