@@ -362,14 +362,14 @@
       $('#hTargetW').textContent = R.fmtNum(grade, 1).replace('W', ''); tBox.querySelector('.tw').lastChild.textContent = '%';
       $('#hTargetD').textContent = `Vuelta ${lap}`;
       fill.style.background = 'var(--sky)'; fill.style.width = (((p.d % L) / L) * 100).toFixed(1) + '%';
-      $('#hStepLeft').textContent = `${R.fmtNum(toGo / 1000, 1)} km para meta`;
+      $('#hStepLeft').innerHTML = `${R.fmtNum(toGo / 1000, 1)}<small>km para meta</small>`;
     }
     if (s && !s.free) tBox.querySelector('.tw').lastChild.textContent = 'W';
     else if (s && s.free) tBox.querySelector('.tw').lastChild.textContent = 'W';
     if (run) $('#hWorkLeft').textContent = R.fmtTime(Math.max(0, run.total - run.t));
     // Aviso del siguiente bloque
     $('#hBanner').hidden = true;
-    if (run && !run.done && run.next() && run.left() <= 10) $('#hStepLeft').textContent = `${R.fmtTime(run.left())} → ${stepLabel(run.next(), run)}`;
+    if (run && !run.done && run.next() && run.left() <= 10) $('#hStepLeft').innerHTML = `${R.fmtTime(run.left())}<small>→ ${R.esc(stepLabel(run.next(), run))}</small>`;
     $('#hDraft').hidden = !rd.bots.draftFor(p) || p.v < 3;
     $('#btnSkip').hidden = !run || run.done;
     followSteps(false);

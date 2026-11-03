@@ -129,9 +129,10 @@ h1 { font-family: var(--num); font-weight: 800; font-style: italic; font-size: 3
 .plate { background: var(--plate); border: 1px solid var(--line); border-radius: 10px; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 .pmain { position: absolute; top: var(--gt); left: calc(var(--gl) + var(--pw) + 8px); right: calc(var(--gr) + var(--prw) + 8px); max-width: 620px; margin-inline: auto; padding: 6px 10px 8px; }
 .hud:not(.work) .pmain { left: calc(var(--gl) + var(--prw) + 8px); }
-.prow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+.prow { display: grid; grid-template-columns: 1fr 1fr .8fr 1.5fr; align-items: baseline; gap: 6px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
 .stat { display: flex; align-items: baseline; justify-content: center; gap: 3px; }
 .stat b { font-size: clamp(17px, 4.6vmin, 32px); font-weight: 800; }
+.stat.time b { font-size: clamp(26px, 8vmin, 46px); }
 .stat i { font-style: normal; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 .pcore { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); align-items: center; gap: 8px; padding-top: 4px; }
 .target { background: var(--z3); color: #08130c; border-radius: 8px; padding: 4px 6px; display: flex; flex-direction: column; align-items: center; line-height: 1; min-width: 0; }
@@ -147,14 +148,17 @@ h1 { font-family: var(--num); font-weight: 800; font-style: italic; font-size: 3
 .side li { display: flex; align-items: baseline; justify-content: flex-end; gap: 4px; }
 .side b { font-size: clamp(15px, 3.8vmin, 26px); font-weight: 700; }
 .side i { font-style: normal; font-size: 11px; color: var(--muted); width: 34px; text-transform: uppercase; }
-.stepbar { position: relative; height: 14px; margin-top: 6px; background: rgba(255, 255, 255, .08); border-radius: 4px; overflow: hidden; }
+.stepbar { position: relative; height: clamp(34px, 11vmin, 52px); margin-top: 6px; background: rgba(255, 255, 255, .08); border-radius: 7px; overflow: hidden; }
 #hStepFill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--z3); opacity: .85; }
-#hStepLeft { position: relative; display: block; text-align: center; font-size: 12px; font-weight: 700; line-height: 14px; }
+#hStepLeft { position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; height: 100%; font-size: clamp(28px, 9.5vmin, 46px); font-weight: 800; line-height: 1; text-shadow: 0 1px 3px rgba(0, 0, 0, .45); white-space: nowrap; }
+#hStepLeft small { font-size: .5em; font-weight: 700; }
 
 .pwork { position: absolute; top: var(--gt); left: var(--gl); bottom: calc(var(--gb) + 54px); width: var(--pw); padding: 5px 6px; display: flex; flex-direction: column; pointer-events: auto; }
 .wtitle { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.wend { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; gap: 6px; white-space: nowrap; }
-.wend b { color: var(--fg); font-size: 15px; }
+.whead { display: flex; align-items: baseline; gap: 6px; }
+.wnum { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.wend { font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; align-items: baseline; gap: 6px; white-space: nowrap; }
+.wend b { color: var(--fg); font-size: clamp(24px, 8vmin, 34px); font-weight: 800; line-height: 1.1; }
 /* Lista completa de bloques: se desplaza con el dedo y vuelve sola al bloque actual */
 .wsteps { list-style: none; margin: 6px 0 0; padding: 0 0 18px; display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-height: 0; overflow-y: auto; position: relative; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none;
   -webkit-mask-image: linear-gradient(to bottom, #000 82%, transparent); mask-image: linear-gradient(to bottom, #000 82%, transparent); }
@@ -163,7 +167,8 @@ h1 { font-family: var(--num); font-weight: 800; font-style: italic; font-size: 3
 .wsteps li.done { opacity: .35; }
 .wsteps li.cur { font-size: 21px; padding: 3px 6px; background: var(--zc); color: #0a0f14; justify-content: center; }
 .wcount { font-size: 12px; color: var(--muted); text-align: right; margin-top: 3px; }
-.wtitle, .wend, .wcount { flex: none; }
+.whead, .wend { flex: none; }
+.whead .wtitle { flex: 1 1 auto; min-width: 0; }
 
 .pstats { position: absolute; top: var(--gt); right: var(--gr); width: var(--prw); padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; }
 .bigstat { display: flex; align-items: baseline; justify-content: flex-end; gap: 6px; }
@@ -331,7 +336,7 @@ h1 { font-family: var(--num); font-weight: 800; font-style: italic; font-size: 3
         <div class="stat"><b id="hSpeed">0</b><i>km/h</i></div>
         <div class="stat"><b id="hDist">0,0</b><i>km</i></div>
         <div class="stat"><b id="hGain">0</b><i>m</i></div>
-        <div class="stat"><b id="hTime">0:00</b><i>tiempo</i></div>
+        <div class="stat time"><b id="hTime">0:00</b><i>tiempo</i></div>
       </div>
       <div class="pcore">
         <div class="target" id="hTarget"><span class="tl">Pedalea a</span><span class="tw"><b id="hTargetW">—</b>W</span><span class="td" id="hTargetD"></span></div>
@@ -341,8 +346,8 @@ h1 { font-family: var(--num); font-weight: 800; font-style: italic; font-size: 3
     </div>
 
     <div class="plate pwork" id="hWork">
-      <div class="wtitle" id="hWorkName"></div>
-      <div class="wend"><span id="hStepCount"></span><span>Fin en <b id="hWorkLeft">0:00</b></span></div>
+      <div class="whead"><div class="wtitle" id="hWorkName"></div><span class="wnum" id="hStepCount"></span></div>
+      <div class="wend"><span>Fin en</span><b id="hWorkLeft">0:00</b></div>
       <ol class="wsteps" id="hSteps"></ol>
     </div>
 
@@ -2209,14 +2214,14 @@ ${pts.join('\n')}
       $('#hTargetW').textContent = R.fmtNum(grade, 1).replace('W', ''); tBox.querySelector('.tw').lastChild.textContent = '%';
       $('#hTargetD').textContent = `Vuelta ${lap}`;
       fill.style.background = 'var(--sky)'; fill.style.width = (((p.d % L) / L) * 100).toFixed(1) + '%';
-      $('#hStepLeft').textContent = `${R.fmtNum(toGo / 1000, 1)} km para meta`;
+      $('#hStepLeft').innerHTML = `${R.fmtNum(toGo / 1000, 1)}<small>km para meta</small>`;
     }
     if (s && !s.free) tBox.querySelector('.tw').lastChild.textContent = 'W';
     else if (s && s.free) tBox.querySelector('.tw').lastChild.textContent = 'W';
     if (run) $('#hWorkLeft').textContent = R.fmtTime(Math.max(0, run.total - run.t));
     // Aviso del siguiente bloque
     $('#hBanner').hidden = true;
-    if (run && !run.done && run.next() && run.left() <= 10) $('#hStepLeft').textContent = `${R.fmtTime(run.left())} → ${stepLabel(run.next(), run)}`;
+    if (run && !run.done && run.next() && run.left() <= 10) $('#hStepLeft').innerHTML = `${R.fmtTime(run.left())}<small>→ ${R.esc(stepLabel(run.next(), run))}</small>`;
     $('#hDraft').hidden = !rd.bots.draftFor(p) || p.v < 3;
     $('#btnSkip').hidden = !run || run.done;
     followSteps(false);
