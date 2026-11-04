@@ -12,6 +12,7 @@
   for (let w = 120; w <= 600; w += 20) rampTest.push(ssW(60, w));
 
   R.BUILTIN_WORKOUTS = [
+    { id: 'ftp-3x10-4020', name: 'FTP - 3 x (10 x 40/20)', desc: 'Calentamiento 12′ · 3 × (10 × 40″ al 115 % / 20″ al 50 %) con 4′ suaves entre series · vuelta a la calma', steps: [ramp(300, 0.53, 0.73), ss(60, 0.73), ss(60, 0.78), ss(60, 0.83), ss(60, 0.88), ss(180, 0.55), rep(10, [ss(40, 1.15), ss(20, 0.5)]), ss(240, 0.55), rep(10, [ss(40, 1.15), ss(20, 0.5)]), ss(240, 0.55), rep(10, [ss(40, 1.15), ss(20, 0.5)]), ss(300, 0.55), ramp(300, 0.6, 0.4)] },
     { id: 'vo2-90', name: 'VO2max - 90´ - 2 x (12 x 30" /20) + 4 x 3´', desc: 'Calentamiento 15′ · 2 × (12 × 30″ al 125 % / 20″) · 4 × 3′ al 113 % · 15′ en Z2 · vuelta a la calma', steps: [ramp(300, 0.53, 0.73), ss(60, 0.73), ss(60, 0.78), ss(60, 0.83), ss(60, 0.88), ss(360, 0.55), rep(12, [ss(30, 1.25), ss(20, 0.50)]), ss(300, 0.55), rep(12, [ss(30, 1.25), ss(20, 0.50)]), ss(360, 0.55), rep(4, [ss(180, 1.13), ss(180, 0.50)]), ss(900, 0.68), ramp(300, 0.60, 0.40)] },
     { id: 'vo2130', name: 'VO2 · 130 % FTP', desc: 'Tres series progresivas: 20/40, 30/30, 40/20, 50/10 y 60″', steps: [ramp(600, 0.40, 0.65), ss(120, 0.40), rep(3, [ss(20, 1.3), ss(40, 0.3), ss(30, 1.3), ss(30, 0.3), ss(40, 1.3), ss(20, 0.3), ss(50, 1.3), ss(10, 0.3), ss(60, 1.3), ss(300, 0.40)])] },
     { id: 'ss3x12', name: 'Sweet spot · 3 × 12′', desc: 'Tres bloques al 90 % con 5′ de recuperación', steps: [ramp(600, 0.45, 0.70), rep(3, [ss(720, 0.90), ss(300, 0.55)]), ramp(300, 0.55, 0.40)] },
