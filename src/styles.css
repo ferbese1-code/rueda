@@ -236,6 +236,7 @@ details.others .list { margin-top: 8px; }
 .stravabox { background: var(--ink); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; font-size: 14px; line-height: 1.45; }
 .stravabox ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
 .stravabox code { background: var(--ink-3); padding: 1px 6px; border-radius: 5px; font-size: 13px; word-break: break-all; }
+.blelog { background: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 10px; font: 12px/1.45 ui-monospace, Menlo, monospace; color: var(--muted); max-height: 220px; overflow: auto; white-space: pre-wrap; word-break: break-word; margin: 0; }
 .stravabox .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
 /* ---------- Resumen ---------- */

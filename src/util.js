@@ -32,6 +32,22 @@ R.rng = seed => () => {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
 
+/* Registro de Bluetooth (Ajustes › Diagnóstico) para saber en qué paso falla una conexión */
+R.bleLog = [];
+R.blog = msg => {
+  const line = new Date().toLocaleTimeString('es-ES') + '  ' + msg;
+  R.bleLog.push(line); if (R.bleLog.length > 80) R.bleLog.shift();
+  try { console.log('[BLE] ' + msg); } catch (e) { /* nada */ }
+  R.emit('blelog');
+};
+R.errText = e => {
+  if (!e) return 'sin detalle';
+  if (typeof e === 'string') return e;
+  const t = [e.name && e.name !== 'Error' ? e.name : '', e.message || ''].filter(Boolean).join(': ');
+  if (t) return t;
+  try { return JSON.stringify(e); } catch (x) { return String(e); }
+};
+
 /* Eventos */
 const bus = {};
 R.on = (n, f) => { (bus[n] = bus[n] || []).push(f); };

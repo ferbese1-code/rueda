@@ -188,8 +188,10 @@
       await d.connect(); R.toast(`${d.label} conectado`, 'ok');
     } catch (e) {
       d.setStatus('off');
-      if (e && e.name === 'NotFoundError') return; // canceló la búsqueda
-      R.toast(`${d.label}: ${e && e.message ? e.message : 'no se pudo conectar'}`, 'bad');
+      if (e && e.name === 'NotFoundError') { R.blog(`${d.label}: búsqueda cancelada`); return; } // canceló la búsqueda
+      const msg = R.errText(e);
+      R.blog(`${d.label}: ERROR en ${d.stage || '?'} → ${msg}`);
+      R.toast(`${d.label}: no se pudo conectar (${msg}). Detalles en Ajustes › Diagnóstico`, 'bad');
     }
   }
 
@@ -729,6 +731,13 @@
     $('#btnSettings').onclick = openSettings; $('#setClose').onclick = () => { $('#settings').hidden = true; renderStartInfo(); };
     $('#btnHistory').onclick = openHistory; $('#histClose').onclick = () => { $('#history').hidden = true; };
     bindSettings();
+    const showLog = () => { const b = $('#bleLogBox'); if (b) b.textContent = R.bleLog.length ? R.bleLog.join('\n') : 'Sin actividad todavía.'; };
+    R.on('blelog', showLog);
+    $('#bleLogCopy').onclick = async () => {
+      const txt = R.bleLog.join('\n') + `\n${navigator.userAgent}`;
+      try { await navigator.clipboard.writeText(txt); R.toast('Registro copiado', 'ok'); }
+      catch (e) { const r = document.createRange(); r.selectNodeContents($('#bleLogBox')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); R.toast('Selecciona y copia el texto'); }
+    };
     // Salida
     $('#btnPause').onclick = () => togglePause();
     ['touchstart', 'pointerdown', 'wheel'].forEach(n => $('#hSteps').addEventListener(n, () => { stepsTouched = Date.now(); }, { passive: true }));

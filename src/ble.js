@@ -5,6 +5,9 @@
   const FEC_SVC = '6e40fec1-b5a3-f393-e0a9-e50e24dcca9e';
   const FEC_RX = '6e40fec2-b5a3-f393-e0a9-e50e24dcca9e'; // notificaciones del rodillo
   const FEC_TX = '6e40fec3-b5a3-f393-e0a9-e50e24dcca9e'; // órdenes al rodillo
+  /* UUID completos en texto: algunos navegadores (Bluefy) no aceptan los números cortos tipo 0x1826 */
+  const U = n => '0000' + n.toString(16).padStart(4, '0') + '-0000-1000-8000-00805f9b34fb';
+  const FTMS = U(0x1826), IBD = U(0x2ad2), FTCP = U(0x2ad9), CPS = U(0x1818), DIS = U(0x180a);
 
   R.bleAvailable = () => !!(navigator.bluetooth && navigator.bluetooth.requestDevice);
 
@@ -24,7 +27,9 @@
     setStatus(s) { this.status = s; R.emit('devices'); }
     async connect() {
       this.manualOff = false;
+      this.stage = 'buscar dispositivo';
       const dev = await navigator.bluetooth.requestDevice(this.requestOptions());
+      R.blog(`${this.label}: elegido «${dev.name || 'sin nombre'}»`);
       if (this.dev && this.dev !== dev) { try { this.dev.gatt.disconnect(); } catch (e) { /* nada */ } }
       this.dev = dev; this.name = dev.name || this.label;
       if (!dev._ruedaHooked) { dev.addEventListener('gattserverdisconnected', () => this.lost()); dev._ruedaHooked = true; }
@@ -32,9 +37,11 @@
     }
     async open() {
       this.setStatus('connecting');
+      this.stage = 'conectar'; R.blog(`${this.label}: conectando…`);
       const server = await this.dev.gatt.connect();
+      try { const ss = await server.getPrimaryServices(); R.blog(`${this.label}: servicios ${ss.map(s => s.uuid.slice(0, 8)).join(', ')}`); } catch (e) { /* no todos lo permiten */ }
       await this.setup(server);
-      this.retries = 0; this.setStatus('on');
+      this.retries = 0; this.setStatus('on'); R.blog(`${this.label}: conectado${this.kind ? ' (' + this.kind + ')' : ''}`);
     }
     lost() {
       if (this.manualOff) { this.setStatus('off'); return; }
@@ -71,37 +78,51 @@
     }
     requestOptions() {
       return {
-        filters: [{ services: [0x1826] }, { services: [FEC_SVC] }, { namePrefix: 'Tacx' }],
-        optionalServices: [0x1826, FEC_SVC, 0x1818, 0x180a]
+        filters: [{ services: [FTMS] }, { services: [FEC_SVC] }, { namePrefix: 'Tacx' }],
+        optionalServices: [FTMS, FEC_SVC, CPS, DIS]
       };
     }
     async setup(server) {
       this.kind = null;
-      let ftms = null;
-      try { ftms = await server.getPrimaryService(0x1826); } catch (e) { ftms = null; }
-      if (ftms) { await this.setupFTMS(ftms); this.kind = 'ftms'; }
-      else { const s = await server.getPrimaryService(FEC_SVC); await this.setupFEC(s); this.kind = 'fec'; }
+      // 1) FTMS (estándar). 2) Si no está o falla, el protocolo propio de Tacx (FE-C por Bluetooth).
+      let ftms = null, firstErr = null;
+      this.stage = 'servicio FTMS';
+      try { ftms = await server.getPrimaryService(FTMS); } catch (e) { ftms = null; R.blog(`Rodillo: sin FTMS (${R.errText(e)})`); }
+      if (ftms) {
+        try { await this.setupFTMS(ftms); this.kind = 'ftms'; }
+        catch (e) { firstErr = `${this.stage}: ${R.errText(e)}`; R.blog(`Rodillo: FTMS falló en ${firstErr}`); }
+      }
+      if (!this.kind) {
+        try {
+          this.stage = 'servicio Tacx FE-C';
+          const s = await server.getPrimaryService(FEC_SVC);
+          await this.setupFEC(s); this.kind = 'fec';
+        } catch (e) {
+          const msg = `${this.stage}: ${R.errText(e)}`; R.blog(`Rodillo: FE-C falló en ${msg}`);
+          throw new Error(firstErr ? `${firstErr} · ${msg}` : msg);
+        }
+      }
       this.sent = { mode: null, watts: null, grade: null, at: 0 };
       if (!this.timer) this.timer = setInterval(() => this.pump(), 300);
     }
     async setupFTMS(s) {
-      this.ibd = await s.getCharacteristic(0x2ad2);
-      this.cp = await s.getCharacteristic(0x2ad9);
+      this.stage = 'datos FTMS'; this.ibd = await s.getCharacteristic(IBD);
+      this.stage = 'control FTMS'; this.cp = await s.getCharacteristic(FTCP);
       this._onIBD = this._onIBD || (e => this.onIBD(e.target.value));
       this._onCP = this._onCP || (e => this.onCP(e.target.value));
       this.ibd.addEventListener('characteristicvaluechanged', this._onIBD);
-      await this.ibd.startNotifications();
+      this.stage = 'avisos FTMS'; await this.ibd.startNotifications();
       try { this.cp.addEventListener('characteristicvaluechanged', this._onCP); await this.cp.startNotifications(); } catch (e) { /* sin indicaciones */ }
       try { await write(this.cp, [0x00]); } catch (e) { /* algunos no responden */ }
       await R.sleep(200);
       try { await write(this.cp, [0x07]); } catch (e) { /* idem */ }
     }
     async setupFEC(s) {
-      this.rx = await s.getCharacteristic(FEC_RX);
-      this.tx = await s.getCharacteristic(FEC_TX);
+      this.stage = 'datos FE-C'; this.rx = await s.getCharacteristic(FEC_RX);
+      this.stage = 'control FE-C'; this.tx = await s.getCharacteristic(FEC_TX);
       this._onFEC = this._onFEC || (e => this.onFEC(e.target.value));
       this.rx.addEventListener('characteristicvaluechanged', this._onFEC);
-      await this.rx.startNotifications();
+      this.stage = 'avisos FE-C'; await this.rx.startNotifications();
       await this.sendFecUser();
     }
     /* FTMS: Indoor Bike Data */

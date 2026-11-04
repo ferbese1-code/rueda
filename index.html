@@ -251,6 +251,7 @@ details.others .list { margin-top: 8px; }
 .stravabox { background: var(--ink); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; font-size: 14px; line-height: 1.45; }
 .stravabox ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
 .stravabox code { background: var(--ink-3); padding: 1px 6px; border-radius: 5px; font-size: 13px; word-break: break-all; }
+.blelog { background: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 10px; font: 12px/1.45 ui-monospace, Menlo, monospace; color: var(--muted); max-height: 220px; overflow: auto; white-space: pre-wrap; word-break: break-word; margin: 0; }
 .stravabox .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
 /* ---------- Resumen ---------- */
@@ -456,6 +457,10 @@ details.others .list { margin-top: 8px; }
     </div>
     <h4 class="label">Strava</h4>
     <div class="stravabox" id="stravaBox"></div>
+    <h4 class="label">Diagnóstico</h4>
+    <p class="muted small">Registro de las conexiones Bluetooth. Si algo no conecta, copia esto y mándamelo.</p>
+    <pre class="blelog" id="bleLogBox">Sin actividad todavía.</pre>
+    <div class="row"><button type="button" class="ghost" id="bleLogCopy">Copiar registro</button></div>
     <h4 class="label">Datos</h4>
     <p class="muted small">Todo se guarda solo en este navegador. Las salidas quedan en el historial aunque no se suban.</p>
   </div>
@@ -503,6 +508,22 @@ R.rng = seed => () => {
   let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
   t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+
+/* Registro de Bluetooth (Ajustes › Diagnóstico) para saber en qué paso falla una conexión */
+R.bleLog = [];
+R.blog = msg => {
+  const line = new Date().toLocaleTimeString('es-ES') + '  ' + msg;
+  R.bleLog.push(line); if (R.bleLog.length > 80) R.bleLog.shift();
+  try { console.log('[BLE] ' + msg); } catch (e) { /* nada */ }
+  R.emit('blelog');
+};
+R.errText = e => {
+  if (!e) return 'sin detalle';
+  if (typeof e === 'string') return e;
+  const t = [e.name && e.name !== 'Error' ? e.name : '', e.message || ''].filter(Boolean).join(': ');
+  if (t) return t;
+  try { return JSON.stringify(e); } catch (x) { return String(e); }
 };
 
 /* Eventos */
@@ -622,6 +643,9 @@ R.saveFile = async (name, text, mime) => {
   const FEC_SVC = '6e40fec1-b5a3-f393-e0a9-e50e24dcca9e';
   const FEC_RX = '6e40fec2-b5a3-f393-e0a9-e50e24dcca9e'; // notificaciones del rodillo
   const FEC_TX = '6e40fec3-b5a3-f393-e0a9-e50e24dcca9e'; // órdenes al rodillo
+  /* UUID completos en texto: algunos navegadores (Bluefy) no aceptan los números cortos tipo 0x1826 */
+  const U = n => '0000' + n.toString(16).padStart(4, '0') + '-0000-1000-8000-00805f9b34fb';
+  const FTMS = U(0x1826), IBD = U(0x2ad2), FTCP = U(0x2ad9), CPS = U(0x1818), DIS = U(0x180a);
 
   R.bleAvailable = () => !!(navigator.bluetooth && navigator.bluetooth.requestDevice);
 
@@ -641,7 +665,9 @@ R.saveFile = async (name, text, mime) => {
     setStatus(s) { this.status = s; R.emit('devices'); }
     async connect() {
       this.manualOff = false;
+      this.stage = 'buscar dispositivo';
       const dev = await navigator.bluetooth.requestDevice(this.requestOptions());
+      R.blog(`${this.label}: elegido «${dev.name || 'sin nombre'}»`);
       if (this.dev && this.dev !== dev) { try { this.dev.gatt.disconnect(); } catch (e) { /* nada */ } }
       this.dev = dev; this.name = dev.name || this.label;
       if (!dev._ruedaHooked) { dev.addEventListener('gattserverdisconnected', () => this.lost()); dev._ruedaHooked = true; }
@@ -649,9 +675,11 @@ R.saveFile = async (name, text, mime) => {
     }
     async open() {
       this.setStatus('connecting');
+      this.stage = 'conectar'; R.blog(`${this.label}: conectando…`);
       const server = await this.dev.gatt.connect();
+      try { const ss = await server.getPrimaryServices(); R.blog(`${this.label}: servicios ${ss.map(s => s.uuid.slice(0, 8)).join(', ')}`); } catch (e) { /* no todos lo permiten */ }
       await this.setup(server);
-      this.retries = 0; this.setStatus('on');
+      this.retries = 0; this.setStatus('on'); R.blog(`${this.label}: conectado${this.kind ? ' (' + this.kind + ')' : ''}`);
     }
     lost() {
       if (this.manualOff) { this.setStatus('off'); return; }
@@ -688,37 +716,51 @@ R.saveFile = async (name, text, mime) => {
     }
     requestOptions() {
       return {
-        filters: [{ services: [0x1826] }, { services: [FEC_SVC] }, { namePrefix: 'Tacx' }],
-        optionalServices: [0x1826, FEC_SVC, 0x1818, 0x180a]
+        filters: [{ services: [FTMS] }, { services: [FEC_SVC] }, { namePrefix: 'Tacx' }],
+        optionalServices: [FTMS, FEC_SVC, CPS, DIS]
       };
     }
     async setup(server) {
       this.kind = null;
-      let ftms = null;
-      try { ftms = await server.getPrimaryService(0x1826); } catch (e) { ftms = null; }
-      if (ftms) { await this.setupFTMS(ftms); this.kind = 'ftms'; }
-      else { const s = await server.getPrimaryService(FEC_SVC); await this.setupFEC(s); this.kind = 'fec'; }
+      // 1) FTMS (estándar). 2) Si no está o falla, el protocolo propio de Tacx (FE-C por Bluetooth).
+      let ftms = null, firstErr = null;
+      this.stage = 'servicio FTMS';
+      try { ftms = await server.getPrimaryService(FTMS); } catch (e) { ftms = null; R.blog(`Rodillo: sin FTMS (${R.errText(e)})`); }
+      if (ftms) {
+        try { await this.setupFTMS(ftms); this.kind = 'ftms'; }
+        catch (e) { firstErr = `${this.stage}: ${R.errText(e)}`; R.blog(`Rodillo: FTMS falló en ${firstErr}`); }
+      }
+      if (!this.kind) {
+        try {
+          this.stage = 'servicio Tacx FE-C';
+          const s = await server.getPrimaryService(FEC_SVC);
+          await this.setupFEC(s); this.kind = 'fec';
+        } catch (e) {
+          const msg = `${this.stage}: ${R.errText(e)}`; R.blog(`Rodillo: FE-C falló en ${msg}`);
+          throw new Error(firstErr ? `${firstErr} · ${msg}` : msg);
+        }
+      }
       this.sent = { mode: null, watts: null, grade: null, at: 0 };
       if (!this.timer) this.timer = setInterval(() => this.pump(), 300);
     }
     async setupFTMS(s) {
-      this.ibd = await s.getCharacteristic(0x2ad2);
-      this.cp = await s.getCharacteristic(0x2ad9);
+      this.stage = 'datos FTMS'; this.ibd = await s.getCharacteristic(IBD);
+      this.stage = 'control FTMS'; this.cp = await s.getCharacteristic(FTCP);
       this._onIBD = this._onIBD || (e => this.onIBD(e.target.value));
       this._onCP = this._onCP || (e => this.onCP(e.target.value));
       this.ibd.addEventListener('characteristicvaluechanged', this._onIBD);
-      await this.ibd.startNotifications();
+      this.stage = 'avisos FTMS'; await this.ibd.startNotifications();
       try { this.cp.addEventListener('characteristicvaluechanged', this._onCP); await this.cp.startNotifications(); } catch (e) { /* sin indicaciones */ }
       try { await write(this.cp, [0x00]); } catch (e) { /* algunos no responden */ }
       await R.sleep(200);
       try { await write(this.cp, [0x07]); } catch (e) { /* idem */ }
     }
     async setupFEC(s) {
-      this.rx = await s.getCharacteristic(FEC_RX);
-      this.tx = await s.getCharacteristic(FEC_TX);
+      this.stage = 'datos FE-C'; this.rx = await s.getCharacteristic(FEC_RX);
+      this.stage = 'control FE-C'; this.tx = await s.getCharacteristic(FEC_TX);
       this._onFEC = this._onFEC || (e => this.onFEC(e.target.value));
       this.rx.addEventListener('characteristicvaluechanged', this._onFEC);
-      await this.rx.startNotifications();
+      this.stage = 'avisos FE-C'; await this.rx.startNotifications();
       await this.sendFecUser();
     }
     /* FTMS: Indoor Bike Data */
@@ -2067,8 +2109,10 @@ ${pts.join('\n')}
       await d.connect(); R.toast(`${d.label} conectado`, 'ok');
     } catch (e) {
       d.setStatus('off');
-      if (e && e.name === 'NotFoundError') return; // canceló la búsqueda
-      R.toast(`${d.label}: ${e && e.message ? e.message : 'no se pudo conectar'}`, 'bad');
+      if (e && e.name === 'NotFoundError') { R.blog(`${d.label}: búsqueda cancelada`); return; } // canceló la búsqueda
+      const msg = R.errText(e);
+      R.blog(`${d.label}: ERROR en ${d.stage || '?'} → ${msg}`);
+      R.toast(`${d.label}: no se pudo conectar (${msg}). Detalles en Ajustes › Diagnóstico`, 'bad');
     }
   }
 
@@ -2608,6 +2652,13 @@ ${pts.join('\n')}
     $('#btnSettings').onclick = openSettings; $('#setClose').onclick = () => { $('#settings').hidden = true; renderStartInfo(); };
     $('#btnHistory').onclick = openHistory; $('#histClose').onclick = () => { $('#history').hidden = true; };
     bindSettings();
+    const showLog = () => { const b = $('#bleLogBox'); if (b) b.textContent = R.bleLog.length ? R.bleLog.join('\n') : 'Sin actividad todavía.'; };
+    R.on('blelog', showLog);
+    $('#bleLogCopy').onclick = async () => {
+      const txt = R.bleLog.join('\n') + `\n${navigator.userAgent}`;
+      try { await navigator.clipboard.writeText(txt); R.toast('Registro copiado', 'ok'); }
+      catch (e) { const r = document.createRange(); r.selectNodeContents($('#bleLogBox')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); R.toast('Selecciona y copia el texto'); }
+    };
     // Salida
     $('#btnPause').onclick = () => togglePause();
     ['touchstart', 'pointerdown', 'wheel'].forEach(n => $('#hSteps').addEventListener(n, () => { stepsTouched = Date.now(); }, { passive: true }));
