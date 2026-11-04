@@ -188,7 +188,7 @@ details.others .list { margin-top: 8px; }
 .whead .wtitle { flex: 1 1 auto; min-width: 0; }
 
 .pstats { position: absolute; top: var(--gt); right: var(--gr); width: var(--prw); padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; }
-.clock { font-family: var(--num); font-size: clamp(18px, 6vmin, 28px); font-weight: 700; color: var(--muted); text-align: right; line-height: 1.1; padding-bottom: 2px; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
+.clock { font-family: var(--num); font-size: clamp(18px, 6vmin, 28px); font-weight: 700; color: var(--fg); text-align: right; line-height: 1.1; padding-bottom: 2px; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
 /* Pedales Assioma: solo informativo */
 .pedals { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 4px; display: flex; flex-direction: column; gap: 1px; }
 .ptitle { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--amber); text-align: right; }
@@ -196,6 +196,7 @@ details.others .list { margin-top: 8px; }
 .pstat b { font-size: clamp(20px, 7vmin, 34px); font-weight: 800; line-height: 1.05; }
 .pstat i { font-style: normal; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; width: 30px; }
 .bal { display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; margin-top: 2px; }
+.bal.only { justify-content: flex-end; color: var(--muted); font-size: 12px; }
 .balbar { height: 6px; border-radius: 3px; background: var(--sky); overflow: hidden; }
 .balbar i { display: block; height: 100%; width: 50%; background: var(--amber); transition: width .4s; }
 .waitstart { position: absolute; left: 50%; top: 60%; transform: translate(-50%, -50%); background: var(--plate); border: 1px solid var(--line); border-radius: 14px; padding: 12px 22px; display: flex; flex-direction: column; align-items: center; gap: 2px; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); white-space: nowrap; }
@@ -330,7 +331,8 @@ details.others .list { margin-top: 8px; }
       <div class="devices">
         <div class="dev" id="dev-trainer"><span class="dot"></span><div class="dmeta"><b>Rodillo</b><span class="dstate">Sin conectar</span></div><button type="button" class="dbtn" data-dev="trainer">Conectar</button></div>
         <div class="dev" id="dev-hrm"><span class="dot"></span><div class="dmeta"><b>Pulsómetro</b><span class="dstate">Opcional</span></div><button type="button" class="dbtn" data-dev="hrm">Conectar</button></div>
-        <div class="dev" id="dev-pm"><span class="dot"></span><div class="dmeta"><b>Pedales (Assioma)</b><span class="dstate">Opcional · solo en pantalla</span></div><button type="button" class="dbtn" data-dev="pm">Conectar</button></div>
+        <div class="dev" id="dev-pm"><span class="dot"></span><div class="dmeta"><b>Pedal izquierdo (Assioma)</b><span class="dstate">Opcional · solo en pantalla</span></div><button type="button" class="dbtn" data-dev="pm">Conectar</button></div>
+        <div class="dev" id="dev-pm2"><span class="dot"></span><div class="dmeta"><b>Pedal derecho (Assioma)</b><span class="dstate">Opcional · solo en pantalla</span></div><button type="button" class="dbtn" data-dev="pm2">Conectar</button></div>
       </div>
       <label class="switch"><input type="checkbox" id="demoMode"><span></span>Modo prueba (simula el rodillo)</label>
     </section>
@@ -887,7 +889,7 @@ R.saveFile = async (name, text, mime) => {
 
   /* ---------- Potenciómetro (p. ej. pedales) ---------- */
   class PowerMeter extends Device {
-    constructor() { super('pm', 'Potenciómetro'); this.lastRevs = null; this.lastT = 0; this.lastCadAt = 0; }
+    constructor(label) { super('pm', label || 'Potenciómetro'); this.lastRevs = null; this.lastT = 0; this.lastCadAt = 0; }
     requestOptions() { return { filters: [{ services: [CPS] }] }; }
     async setup(server) {
       const s = await server.getPrimaryService(CPS);
@@ -1952,7 +1954,7 @@ ${pts.join('\n')}
   let set = { ...DEF, ...R.store.get('settings', {}) };
   const saveSet = () => R.store.set('settings', set);
 
-  const dev = { trainer: new R.Trainer(), hrm: new R.HRM(), pm: new R.PowerMeter(), sim: new R.SimTrainer() };
+  const dev = { trainer: new R.Trainer(), hrm: new R.HRM(), pm: new R.PowerMeter('Pedal izquierdo'), pm2: new R.PowerMeter('Pedal derecho'), sim: new R.SimTrainer() };
   let demo = false;
   const trainer = () => (demo ? dev.sim : dev.trainer);
 
@@ -1991,12 +1993,12 @@ ${pts.join('\n')}
   function showScreen(id) { ['home', 'ride', 'summary'].forEach(s => { $('#' + s).hidden = s !== id; }); }
 
   function renderDevices() {
-    const map = { trainer: trainer(), hrm: dev.hrm, pm: dev.pm };
+    const map = { trainer: trainer(), hrm: dev.hrm, pm: dev.pm, pm2: dev.pm2 };
     Object.entries(map).forEach(([k, d]) => {
       const el = $('#dev-' + k); if (!el) return;
       el.className = 'dev ' + (d.status || 'off');
       const st = el.querySelector('.dstate'), btn = el.querySelector('.dbtn');
-      const idle = { trainer: 'Sin conectar', hrm: 'Opcional', pm: 'Opcional · solo en pantalla' }[k];
+      const idle = { trainer: 'Sin conectar', hrm: 'Opcional', pm: 'Opcional · solo en pantalla', pm2: 'Opcional · solo en pantalla' }[k];
       const txt = { on: d.name || 'Conectado', connecting: 'Conectando…', lost: 'Reconectando…', off: idle }[d.status || 'off'];
       st.textContent = k === 'trainer' && demo ? 'Simulador activo' : (k === 'trainer' && d.status === 'on' && d.kind ? `${d.name} · ${d.kind === 'ftms' ? 'FTMS' : d.kind === 'fec' ? 'FE-C' : 'prueba'}` : txt);
       btn.textContent = d.status === 'on' ? 'Desconectar' : 'Conectar';
@@ -2182,10 +2184,17 @@ ${pts.join('\n')}
     const P = rd.paused ? 0 : live.power();
     rd.pEma += (P - rd.pEma) * (1 - Math.exp(-h / 0.9));
     rd.cad = live.cadence(); rd.hr = live.hr();
-    // Pedales: media suave para que el número no baile
-    if (dev.pm.fresh()) {
-      rd.pmP += (dev.pm.data.power - rd.pmP) * (1 - Math.exp(-h / 1.5));
-      if (dev.pm.data.bal != null && dev.pm.data.power > 20) rd.pmBal = rd.pmBal == null ? dev.pm.data.bal : rd.pmBal + (dev.pm.data.bal - rd.pmBal) * (1 - Math.exp(-h / 3));
+    // Pedales (solo pantalla). Con los dos Assioma en doble canal: suma y reparto calculado aquí.
+    // Con uno solo en modo unificado: su potencia total y el reparto que envía.
+    const pL = dev.pm.fresh() ? dev.pm.data : null, pR = dev.pm2.fresh() ? dev.pm2.data : null;
+    rd.ped = null;
+    if (pL || pR) {
+      let pw, bal = null, cad, only = '';
+      if (pL && pR) { pw = pL.power + pR.power; bal = pw > 20 ? (pL.power / pw) * 100 : null; cad = Math.max(pL.cadence, pR.cadence); }
+      else { const d = pL || pR; pw = d.power; cad = d.cadence; if (d.bal != null && d.power > 20) bal = d.bal; else if (d.bal == null) only = pL ? 'Solo pedal izquierdo' : 'Solo pedal derecho'; }
+      rd.pmP += (pw - rd.pmP) * (1 - Math.exp(-h / 1.5));
+      if (bal != null) rd.pmBal = rd.pmBal == null ? bal : rd.pmBal + (bal - rd.pmBal) * (1 - Math.exp(-h / 3));
+      rd.ped = { cad, only };
     }
     // El tiempo y el entrenamiento no arrancan hasta que empiezas a pedalear
     if (!rd.started && !rd.paused && (P > 25 || rd.cad > 15)) { rd.started = true; rd.start = Date.now(); rd.savedAt = Date.now(); $('#hWait').hidden = true; }
@@ -2364,18 +2373,21 @@ ${pts.join('\n')}
     $('#btnSkip').hidden = !run || run.done;
     followSteps(false);
     // Sensores
-    const dots = [trainer(), dev.hrm.status !== 'off' ? dev.hrm : null, dev.pm.status !== 'off' ? dev.pm : null].filter(Boolean);
+    const dots = [trainer(), dev.hrm.status !== 'off' ? dev.hrm : null, dev.pm.status !== 'off' ? dev.pm : null, dev.pm2.status !== 'off' ? dev.pm2 : null].filter(Boolean);
     $('#hClock').textContent = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
     $('#hWait').hidden = rd.started || rd.paused;
     // Pedales (solo informativo)
-    const pm = dev.pm, ped = $('#hPedals');
-    if (pm.status === 'on' || pm.status === 'lost') {
+    // Pedales: el cuadro solo aparece si llegan datos de algún pedal
+    const ped = $('#hPedals');
+    if (rd.ped) {
       ped.hidden = false;
-      const ok = pm.fresh(), bal = ok && rd.pmBal != null ? rd.pmBal : null;
-      $('#hPmW').textContent = ok ? Math.round(rd.pmP) : '—';
-      $('#hPmC').textContent = ok ? Math.round(pm.data.cadence) : '—';
-      $('#hBalL').textContent = bal == null ? 'I —' : `I ${Math.round(bal)}%`;
-      $('#hBalR').textContent = bal == null ? 'D —' : `D ${100 - Math.round(bal)}%`;
+      const only = rd.ped.only, bal = only ? null : rd.pmBal, balRow = $('#hBalL').parentElement;
+      $('#hPmW').textContent = Math.round(rd.pmP);
+      $('#hPmC').textContent = Math.round(rd.ped.cad);
+      balRow.classList.toggle('only', !!only);
+      $('#hBalL').textContent = only ? only : bal == null ? 'I —' : `I ${Math.round(bal)}%`;
+      $('#hBalR').textContent = only ? '' : bal == null ? 'D —' : `D ${100 - Math.round(bal)}%`;
+      $('#hBalBar').parentElement.hidden = !!only;
       $('#hBalBar').style.width = (bal == null ? 50 : bal) + '%';
     } else ped.hidden = true;
     $('#hDevs').innerHTML = dots.map(d => `<i class="${d.fresh() ? '' : 'bad'}" title="${R.esc(d.label)}"></i>`).join('');

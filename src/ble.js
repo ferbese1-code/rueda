@@ -226,7 +226,7 @@
 
   /* ---------- Potenciómetro (p. ej. pedales) ---------- */
   class PowerMeter extends Device {
-    constructor() { super('pm', 'Potenciómetro'); this.lastRevs = null; this.lastT = 0; this.lastCadAt = 0; }
+    constructor(label) { super('pm', label || 'Potenciómetro'); this.lastRevs = null; this.lastT = 0; this.lastCadAt = 0; }
     requestOptions() { return { filters: [{ services: [CPS] }] }; }
     async setup(server) {
       const s = await server.getPrimaryService(CPS);

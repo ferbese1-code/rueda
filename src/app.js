@@ -6,7 +6,7 @@
   let set = { ...DEF, ...R.store.get('settings', {}) };
   const saveSet = () => R.store.set('settings', set);
 
-  const dev = { trainer: new R.Trainer(), hrm: new R.HRM(), pm: new R.PowerMeter(), sim: new R.SimTrainer() };
+  const dev = { trainer: new R.Trainer(), hrm: new R.HRM(), pm: new R.PowerMeter('Pedal izquierdo'), pm2: new R.PowerMeter('Pedal derecho'), sim: new R.SimTrainer() };
   let demo = false;
   const trainer = () => (demo ? dev.sim : dev.trainer);
 
@@ -45,12 +45,12 @@
   function showScreen(id) { ['home', 'ride', 'summary'].forEach(s => { $('#' + s).hidden = s !== id; }); }
 
   function renderDevices() {
-    const map = { trainer: trainer(), hrm: dev.hrm, pm: dev.pm };
+    const map = { trainer: trainer(), hrm: dev.hrm, pm: dev.pm, pm2: dev.pm2 };
     Object.entries(map).forEach(([k, d]) => {
       const el = $('#dev-' + k); if (!el) return;
       el.className = 'dev ' + (d.status || 'off');
       const st = el.querySelector('.dstate'), btn = el.querySelector('.dbtn');
-      const idle = { trainer: 'Sin conectar', hrm: 'Opcional', pm: 'Opcional · solo en pantalla' }[k];
+      const idle = { trainer: 'Sin conectar', hrm: 'Opcional', pm: 'Opcional · solo en pantalla', pm2: 'Opcional · solo en pantalla' }[k];
       const txt = { on: d.name || 'Conectado', connecting: 'Conectando…', lost: 'Reconectando…', off: idle }[d.status || 'off'];
       st.textContent = k === 'trainer' && demo ? 'Simulador activo' : (k === 'trainer' && d.status === 'on' && d.kind ? `${d.name} · ${d.kind === 'ftms' ? 'FTMS' : d.kind === 'fec' ? 'FE-C' : 'prueba'}` : txt);
       btn.textContent = d.status === 'on' ? 'Desconectar' : 'Conectar';
@@ -236,10 +236,17 @@
     const P = rd.paused ? 0 : live.power();
     rd.pEma += (P - rd.pEma) * (1 - Math.exp(-h / 0.9));
     rd.cad = live.cadence(); rd.hr = live.hr();
-    // Pedales: media suave para que el número no baile
-    if (dev.pm.fresh()) {
-      rd.pmP += (dev.pm.data.power - rd.pmP) * (1 - Math.exp(-h / 1.5));
-      if (dev.pm.data.bal != null && dev.pm.data.power > 20) rd.pmBal = rd.pmBal == null ? dev.pm.data.bal : rd.pmBal + (dev.pm.data.bal - rd.pmBal) * (1 - Math.exp(-h / 3));
+    // Pedales (solo pantalla). Con los dos Assioma en doble canal: suma y reparto calculado aquí.
+    // Con uno solo en modo unificado: su potencia total y el reparto que envía.
+    const pL = dev.pm.fresh() ? dev.pm.data : null, pR = dev.pm2.fresh() ? dev.pm2.data : null;
+    rd.ped = null;
+    if (pL || pR) {
+      let pw, bal = null, cad, only = '';
+      if (pL && pR) { pw = pL.power + pR.power; bal = pw > 20 ? (pL.power / pw) * 100 : null; cad = Math.max(pL.cadence, pR.cadence); }
+      else { const d = pL || pR; pw = d.power; cad = d.cadence; if (d.bal != null && d.power > 20) bal = d.bal; else if (d.bal == null) only = pL ? 'Solo pedal izquierdo' : 'Solo pedal derecho'; }
+      rd.pmP += (pw - rd.pmP) * (1 - Math.exp(-h / 1.5));
+      if (bal != null) rd.pmBal = rd.pmBal == null ? bal : rd.pmBal + (bal - rd.pmBal) * (1 - Math.exp(-h / 3));
+      rd.ped = { cad, only };
     }
     // El tiempo y el entrenamiento no arrancan hasta que empiezas a pedalear
     if (!rd.started && !rd.paused && (P > 25 || rd.cad > 15)) { rd.started = true; rd.start = Date.now(); rd.savedAt = Date.now(); $('#hWait').hidden = true; }
@@ -418,18 +425,21 @@
     $('#btnSkip').hidden = !run || run.done;
     followSteps(false);
     // Sensores
-    const dots = [trainer(), dev.hrm.status !== 'off' ? dev.hrm : null, dev.pm.status !== 'off' ? dev.pm : null].filter(Boolean);
+    const dots = [trainer(), dev.hrm.status !== 'off' ? dev.hrm : null, dev.pm.status !== 'off' ? dev.pm : null, dev.pm2.status !== 'off' ? dev.pm2 : null].filter(Boolean);
     $('#hClock').textContent = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
     $('#hWait').hidden = rd.started || rd.paused;
     // Pedales (solo informativo)
-    const pm = dev.pm, ped = $('#hPedals');
-    if (pm.status === 'on' || pm.status === 'lost') {
+    // Pedales: el cuadro solo aparece si llegan datos de algún pedal
+    const ped = $('#hPedals');
+    if (rd.ped) {
       ped.hidden = false;
-      const ok = pm.fresh(), bal = ok && rd.pmBal != null ? rd.pmBal : null;
-      $('#hPmW').textContent = ok ? Math.round(rd.pmP) : '—';
-      $('#hPmC').textContent = ok ? Math.round(pm.data.cadence) : '—';
-      $('#hBalL').textContent = bal == null ? 'I —' : `I ${Math.round(bal)}%`;
-      $('#hBalR').textContent = bal == null ? 'D —' : `D ${100 - Math.round(bal)}%`;
+      const only = rd.ped.only, bal = only ? null : rd.pmBal, balRow = $('#hBalL').parentElement;
+      $('#hPmW').textContent = Math.round(rd.pmP);
+      $('#hPmC').textContent = Math.round(rd.ped.cad);
+      balRow.classList.toggle('only', !!only);
+      $('#hBalL').textContent = only ? only : bal == null ? 'I —' : `I ${Math.round(bal)}%`;
+      $('#hBalR').textContent = only ? '' : bal == null ? 'D —' : `D ${100 - Math.round(bal)}%`;
+      $('#hBalBar').parentElement.hidden = !!only;
       $('#hBalBar').style.width = (bal == null ? 50 : bal) + '%';
     } else ped.hidden = true;
     $('#hDevs').innerHTML = dots.map(d => `<i class="${d.fresh() ? '' : 'bad'}" title="${R.esc(d.label)}"></i>`).join('');
