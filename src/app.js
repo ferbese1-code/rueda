@@ -16,14 +16,9 @@
 
   /* ---------- Datos en vivo ---------- */
   const live = {
-    power() {
-      if (set.powerSource === 'pm' && dev.pm.fresh()) return dev.pm.data.power;
-      const t = trainer(); return t.fresh() ? t.data.power : 0;
-    },
-    cadence() {
-      if (dev.pm.fresh() && dev.pm.data.cadence > 0) return dev.pm.data.cadence;
-      const t = trainer(); return t.fresh() ? t.data.cadence : 0;
-    },
+    // Vatios y cadencia siempre del rodillo. Los pedales (Assioma) solo se muestran en pantalla.
+    power() { const t = trainer(); return t.fresh() ? t.data.power : 0; },
+    cadence() { const t = trainer(); return t.fresh() ? t.data.cadence : 0; },
     hr() {
       if (dev.hrm.fresh()) return dev.hrm.data.hr;
       const t = trainer(); return t.fresh() && t.data.hr ? t.data.hr : 0;
@@ -41,7 +36,7 @@
       player: { d: 0, v: 0, mass: set.weight + set.bike, lane: 1.8, crank: 0, wheel: 0, jersey: set.jersey },
       bots: new R.Bots(set.bots ? 10 : 0, (Date.now() & 0xffff) + 1),
       elapsed: 0, lastSec: -1, gain: 0, kj: 0, sumP: 0, n: 0, accP: 0, accT: 0,
-      pEma: 0, cad: 0, hr: 0, erg: true, pmRatio: 1, start: Date.now(), samples: R.newSamples(),
+      pEma: 0, cad: 0, hr: 0, erg: true, started: false, pmP: 0, pmBal: null, start: Date.now(), samples: R.newSamples(),
       lastLeftSec: null, savedAt: 0
     };
   }
@@ -55,7 +50,7 @@
       const el = $('#dev-' + k); if (!el) return;
       el.className = 'dev ' + (d.status || 'off');
       const st = el.querySelector('.dstate'), btn = el.querySelector('.dbtn');
-      const idle = { trainer: 'Sin conectar', hrm: 'Opcional', pm: 'Opcional (pedales)' }[k];
+      const idle = { trainer: 'Sin conectar', hrm: 'Opcional', pm: 'Opcional · solo en pantalla' }[k];
       const txt = { on: d.name || 'Conectado', connecting: 'Conectando…', lost: 'Reconectando…', off: idle }[d.status || 'off'];
       st.textContent = k === 'trainer' && demo ? 'Simulador activo' : (k === 'trainer' && d.status === 'on' && d.kind ? `${d.name} · ${d.kind === 'ftms' ? 'FTMS' : d.kind === 'fec' ? 'FE-C' : 'prueba'}` : txt);
       btn.textContent = d.status === 'on' ? 'Desconectar' : 'Conectar';
@@ -215,7 +210,7 @@
     updateHud();
     W.resize(); sizeHudCanvases(); prepProfile(); frameRider();
     setTimeout(frameRider, 600); // cuando terminan de cargar las fuentes
-    $('#hPaused').hidden = true;
+    $('#hPaused').hidden = true; $('#hWait').hidden = false;
     R.wake.on();
     lastFrame = performance.now();
     updateHud();
@@ -241,7 +236,14 @@
     const P = rd.paused ? 0 : live.power();
     rd.pEma += (P - rd.pEma) * (1 - Math.exp(-h / 0.9));
     rd.cad = live.cadence(); rd.hr = live.hr();
-    if (!rd.paused) {
+    // Pedales: media suave para que el número no baile
+    if (dev.pm.fresh()) {
+      rd.pmP += (dev.pm.data.power - rd.pmP) * (1 - Math.exp(-h / 1.5));
+      if (dev.pm.data.bal != null && dev.pm.data.power > 20) rd.pmBal = rd.pmBal == null ? dev.pm.data.bal : rd.pmBal + (dev.pm.data.bal - rd.pmBal) * (1 - Math.exp(-h / 3));
+    }
+    // El tiempo y el entrenamiento no arrancan hasta que empiezas a pedalear
+    if (!rd.started && !rd.paused && (P > 25 || rd.cad > 15)) { rd.started = true; rd.start = Date.now(); rd.savedAt = Date.now(); $('#hWait').hidden = true; }
+    if (!rd.paused && rd.started) {
       rd.elapsed += h; rd.accP += P * h; rd.accT += h; rd.kj += (P * h) / 1000;
       if (rd.run && !rd.run.done) {
         const changed = rd.run.tick(h);
@@ -266,10 +268,6 @@
     S.v.push(Math.round(p.v * 36) / 10); S.d.push(Math.round(p.d * 10) / 10); S.alt.push(Math.round(rd.route.elev(p.d) * 10) / 10);
     rd.sumP += P; rd.n++;
     // Igualar potencia (rodillo vs potenciómetro)
-    if (set.powerSource === 'pm' && dev.pm.fresh() && dev.trainer.fresh() && dev.pm.data.power > 60) {
-      const ratio = R.clamp(dev.trainer.data.power / dev.pm.data.power, 0.85, 1.15);
-      rd.pmRatio += (ratio - rd.pmRatio) * 0.1;
-    }
     // Test de rampa: fin automático cuando ya no se sostiene
     if (rd.run && !rd.run.done && rd.wdef.test === 'ramp' && rd.run.idx >= 3) {
       const n = S.p.length, k = 15; if (n > k) {
@@ -287,7 +285,6 @@
     const s = rd.run && !rd.run.done ? rd.run.cur() : null;
     if (s && !s.free && rd.erg) {
       let t = rd.run.target(set.ftp);
-      if (set.powerSource === 'pm' && set.powerMatch && !demo) t = Math.round(t * rd.pmRatio);
       tr.setErg(t);
     } else {
       tr.setSim(rd.route.grade(rd.player.d + 3) * (set.difficulty / 100));
@@ -422,6 +419,19 @@
     followSteps(false);
     // Sensores
     const dots = [trainer(), dev.hrm.status !== 'off' ? dev.hrm : null, dev.pm.status !== 'off' ? dev.pm : null].filter(Boolean);
+    $('#hClock').textContent = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    $('#hWait').hidden = rd.started || rd.paused;
+    // Pedales (solo informativo)
+    const pm = dev.pm, ped = $('#hPedals');
+    if (pm.status === 'on' || pm.status === 'lost') {
+      ped.hidden = false;
+      const ok = pm.fresh(), bal = ok && rd.pmBal != null ? rd.pmBal : null;
+      $('#hPmW').textContent = ok ? Math.round(rd.pmP) : '—';
+      $('#hPmC').textContent = ok ? Math.round(pm.data.cadence) : '—';
+      $('#hBalL').textContent = bal == null ? 'I —' : `I ${Math.round(bal)}%`;
+      $('#hBalR').textContent = bal == null ? 'D —' : `D ${100 - Math.round(bal)}%`;
+      $('#hBalBar').style.width = (bal == null ? 50 : bal) + '%';
+    } else ped.hidden = true;
     $('#hDevs').innerHTML = dots.map(d => `<i class="${d.fresh() ? '' : 'bad'}" title="${R.esc(d.label)}"></i>`).join('');
   }
 
@@ -616,7 +626,7 @@
   /* ---------- Ajustes ---------- */
   function openSettings() {
     $('#fName').value = set.name; $('#fFtp').value = set.ftp; $('#fKg').value = set.weight; $('#fBike').value = set.bike; $('#fJersey').value = set.jersey;
-    $('#fSource').value = set.powerSource; $('#fMatch').value = set.powerMatch ? '1' : '0'; $('#fDiff').value = String(set.difficulty); $('#fQuality').value = set.quality; $('#fBots').value = set.bots ? '1' : '0';
+    $('#fDiff').value = String(set.difficulty); $('#fQuality').value = set.quality; $('#fBots').value = set.bots ? '1' : '0';
     renderStrava(); $('#settings').hidden = false;
   }
   function bindSettings() {
@@ -624,8 +634,6 @@
     num('#fFtp', 'ftp', 80, 600); num('#fKg', 'weight', 35, 150); num('#fBike', 'bike', 5, 20);
     $('#fName').addEventListener('change', e => { set.name = e.target.value.trim().slice(0, 24) || 'Tú'; saveSet(); });
     $('#fJersey').addEventListener('change', e => { set.jersey = e.target.value; saveSet(); if (glReady) W.setPlayerJersey(); });
-    $('#fSource').addEventListener('change', e => { set.powerSource = e.target.value; saveSet(); });
-    $('#fMatch').addEventListener('change', e => { set.powerMatch = e.target.value === '1'; saveSet(); });
     $('#fDiff').addEventListener('change', e => { set.difficulty = parseInt(e.target.value, 10); saveSet(); });
     $('#fQuality').addEventListener('change', e => { set.quality = e.target.value; saveSet(); });
     $('#fBots').addEventListener('change', e => { set.bots = e.target.value === '1'; saveSet(); });

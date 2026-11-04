@@ -24,7 +24,7 @@
       <div class="devices">
         <div class="dev" id="dev-trainer"><span class="dot"></span><div class="dmeta"><b>Rodillo</b><span class="dstate">Sin conectar</span></div><button type="button" class="dbtn" data-dev="trainer">Conectar</button></div>
         <div class="dev" id="dev-hrm"><span class="dot"></span><div class="dmeta"><b>Pulsómetro</b><span class="dstate">Opcional</span></div><button type="button" class="dbtn" data-dev="hrm">Conectar</button></div>
-        <div class="dev" id="dev-pm"><span class="dot"></span><div class="dmeta"><b>Potenciómetro</b><span class="dstate">Opcional (pedales)</span></div><button type="button" class="dbtn" data-dev="pm">Conectar</button></div>
+        <div class="dev" id="dev-pm"><span class="dot"></span><div class="dmeta"><b>Pedales (Assioma)</b><span class="dstate">Opcional · solo en pantalla</span></div><button type="button" class="dbtn" data-dev="pm">Conectar</button></div>
       </div>
       <label class="switch"><input type="checkbox" id="demoMode"><span></span>Modo prueba (simula el rodillo)</label>
     </section>
@@ -80,15 +80,24 @@
     </div>
 
     <div class="plate pstats" id="hStats">
+      <div class="clock" id="hClock">--:--</div>
       <div class="bigstat"><b id="hCad">0</b><i>rpm</i></div>
       <div class="bigstat"><b id="hAvg">0</b><i>W med</i></div>
       <div class="bigstat"><b id="hHr">—</b><i>ppm</i></div>
+      <div class="pedals" id="hPedals" hidden>
+        <div class="ptitle">Pedales</div>
+        <div class="pstat"><b id="hPmW">—</b><i>W</i></div>
+        <div class="pstat"><b id="hPmC">—</b><i>rpm</i></div>
+        <div class="bal"><span id="hBalL">I —</span><span id="hBalR">D —</span></div>
+        <div class="balbar"><i id="hBalBar"></i></div>
+      </div>
     </div>
 
     <canvas id="hProfile" class="pprofile" width="1200" height="90"></canvas>
     <div class="draft" id="hDraft" hidden>Rebufo</div>
     <div class="banner" id="hBanner" hidden></div>
     <div class="paused" id="hPaused" hidden>En pausa</div>
+    <div class="waitstart" id="hWait" hidden><b>Empieza a pedalear</b><small>El tiempo arranca solo</small></div>
 
     <div class="pctl">
       <button type="button" class="round" id="btnPause" aria-label="Pausa">❚❚</button>
@@ -159,8 +168,6 @@
     </div>
     <h4 class="label">Rodillo y gráficos</h4>
     <div class="fields">
-      <label class="field"><span>Potencia que se registra</span><select id="fSource"><option value="trainer">La del rodillo</option><option value="pm">La del potenciómetro</option></select></label>
-      <label class="field"><span>Igualar potencia en ERG (con potenciómetro)</span><select id="fMatch"><option value="1">Sí</option><option value="0">No</option></select></label>
       <label class="field"><span>Dificultad en ruta</span><select id="fDiff"><option value="25">25 %</option><option value="50">50 % (como Zwift)</option><option value="75">75 %</option><option value="100">100 % (pendiente real)</option></select></label>
       <label class="field"><span>Otros ciclistas en la carretera</span><select id="fBots"><option value="0">No</option><option value="1">Sí</option></select></label>
       <label class="field"><span>Calidad gráfica</span><select id="fQuality"><option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja (ahorra batería)</option></select></label>

@@ -7,7 +7,7 @@
   const FEC_TX = '6e40fec3-b5a3-f393-e0a9-e50e24dcca9e'; // órdenes al rodillo
   /* UUID completos en texto: algunos navegadores (Bluefy) no aceptan los números cortos tipo 0x1826 */
   const U = n => '0000' + n.toString(16).padStart(4, '0') + '-0000-1000-8000-00805f9b34fb';
-  const FTMS = U(0x1826), IBD = U(0x2ad2), FTCP = U(0x2ad9), CPS = U(0x1818), DIS = U(0x180a);
+  const FTMS = U(0x1826), IBD = U(0x2ad2), FTCP = U(0x2ad9), CPS = U(0x1818), DIS = U(0x180a), CPM = U(0x2a63), HRS = U(0x180d), HRMC = U(0x2a37);
 
   R.bleAvailable = () => !!(navigator.bluetooth && navigator.bluetooth.requestDevice);
 
@@ -209,10 +209,10 @@
   /* ---------- Pulsómetro ---------- */
   class HRM extends Device {
     constructor() { super('hrm', 'Pulsómetro'); }
-    requestOptions() { return { filters: [{ services: ['heart_rate'] }] }; }
+    requestOptions() { return { filters: [{ services: [HRS] }] }; }
     async setup(server) {
-      const s = await server.getPrimaryService('heart_rate');
-      const c = await s.getCharacteristic('heart_rate_measurement');
+      const s = await server.getPrimaryService(HRS);
+      const c = await s.getCharacteristic(HRMC);
       this._h = this._h || (e => this.on(e.target.value));
       c.addEventListener('characteristicvaluechanged', this._h);
       await c.startNotifications();
@@ -227,10 +227,10 @@
   /* ---------- Potenciómetro (p. ej. pedales) ---------- */
   class PowerMeter extends Device {
     constructor() { super('pm', 'Potenciómetro'); this.lastRevs = null; this.lastT = 0; this.lastCadAt = 0; }
-    requestOptions() { return { filters: [{ services: ['cycling_power'] }] }; }
+    requestOptions() { return { filters: [{ services: [CPS] }] }; }
     async setup(server) {
-      const s = await server.getPrimaryService('cycling_power');
-      const c = await s.getCharacteristic('cycling_power_measurement');
+      const s = await server.getPrimaryService(CPS);
+      const c = await s.getCharacteristic(CPM);
       this._h = this._h || (e => this.on(e.target.value));
       c.addEventListener('characteristicvaluechanged', this._h);
       await c.startNotifications();
@@ -240,7 +240,9 @@
       try {
         const f = dv.getUint16(0, true); let o = 2; const now = performance.now();
         this.data.power = Math.max(0, dv.getInt16(o, true)); o += 2;
-        if (f & 0x01) o += 1;
+        // Reparto entre piernas: % del pedal de referencia (izquierdo si el bit 1 está activo o no se indica)
+        if (f & 0x01) { const b = dv.getUint8(o); this.data.bal = b === 0xff ? null : b / 2; this.data.balLeft = !!(f & 0x02); o += 1; }
+        else this.data.bal = null;
         if (f & 0x04) o += 2;
         if (f & 0x10) o += 6;
         if ((f & 0x20) && dv.byteLength >= o + 4) {
