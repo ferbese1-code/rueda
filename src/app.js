@@ -36,7 +36,7 @@
       player: { d: 0, v: 0, mass: set.weight + set.bike, lane: 1.8, crank: 0, wheel: 0, jersey: set.jersey },
       bots: new R.Bots(set.bots ? 10 : 0, (Date.now() & 0xffff) + 1),
       elapsed: 0, lastSec: -1, gain: 0, kj: 0, sumP: 0, n: 0, accP: 0, accT: 0,
-      pEma: 0, cad: 0, hr: 0, erg: true, started: false, pmP: 0, pmBal: null, start: Date.now(), samples: R.newSamples(),
+      pEma: 0, cad: 0, hr: 0, erg: true, started: false, ped: null, pedAcc: { t: 0, e: 0, ct: 0, cs: 0, le: 0, te: 0 }, start: Date.now(), samples: R.newSamples(),
       lastLeftSec: null, savedAt: 0
     };
   }
@@ -239,14 +239,18 @@
     // Pedales (solo pantalla). Con los dos Assioma en doble canal: suma y reparto calculado aquí.
     // Con uno solo en modo unificado: su potencia total y el reparto que envía.
     const pL = dev.pm.fresh() ? dev.pm.data : null, pR = dev.pm2.fresh() ? dev.pm2.data : null;
+    // Se muestran las MEDIAS de la sesión (desde el primer pedaleo, sin pausas)
     rd.ped = null;
     if (pL || pR) {
-      let pw, bal = null, cad, only = '';
-      if (pL && pR) { pw = pL.power + pR.power; bal = pw > 20 ? (pL.power / pw) * 100 : null; cad = Math.max(pL.cadence, pR.cadence); }
-      else { const d = pL || pR; pw = d.power; cad = d.cadence; if (d.bal != null && d.power > 20) bal = d.bal; else if (d.bal == null) only = pL ? 'Solo pedal izquierdo' : 'Solo pedal derecho'; }
-      rd.pmP += (pw - rd.pmP) * (1 - Math.exp(-h / 1.5));
-      if (bal != null) rd.pmBal = rd.pmBal == null ? bal : rd.pmBal + (bal - rd.pmBal) * (1 - Math.exp(-h / 3));
-      rd.ped = { cad, only };
+      let pw, left = null, cad, only = '';
+      if (pL && pR) { pw = pL.power + pR.power; left = pL.power; cad = Math.max(pL.cadence, pR.cadence); }
+      else { const d = pL || pR; pw = d.power; cad = d.cadence; if (d.bal != null) left = pw * d.bal / 100; else only = pL ? 'Solo pedal izquierdo' : 'Solo pedal derecho'; }
+      rd.ped = { only };
+      if (rd.started && !rd.paused) {
+        const A = rd.pedAcc; A.t += h; A.e += pw * h;
+        if (cad > 0) { A.ct += h; A.cs += cad * h; }
+        if (left != null && pw > 0) { A.le += left * h; A.te += pw * h; }
+      }
     }
     // El tiempo y el entrenamiento no arrancan hasta que empiezas a pedalear
     if (!rd.started && !rd.paused && (P > 25 || rd.cad > 15)) { rd.started = true; rd.start = Date.now(); rd.savedAt = Date.now(); $('#hWait').hidden = true; }
@@ -433,9 +437,9 @@
     const ped = $('#hPedals');
     if (rd.ped) {
       ped.hidden = false;
-      const only = rd.ped.only, bal = only ? null : rd.pmBal, balRow = $('#hBalL').parentElement;
-      $('#hPmW').textContent = Math.round(rd.pmP);
-      $('#hPmC').textContent = Math.round(rd.ped.cad);
+      const A = rd.pedAcc, only = rd.ped.only, bal = only || !(A.te > 0) ? null : (A.le / A.te) * 100, balRow = $('#hBalL').parentElement;
+      $('#hPmW').textContent = A.t > 0 ? Math.round(A.e / A.t) : '—';
+      $('#hPmC').textContent = A.ct > 0 ? Math.round(A.cs / A.ct) : '—';
       balRow.classList.toggle('only', !!only);
       $('#hBalL').textContent = only ? only : bal == null ? 'I —' : `I ${Math.round(bal)}%`;
       $('#hBalR').textContent = only ? '' : bal == null ? 'D —' : `D ${100 - Math.round(bal)}%`;
