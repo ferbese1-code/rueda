@@ -246,6 +246,8 @@
       if (pL && pR) { pw = pL.power + pR.power; left = pL.power; cad = Math.max(pL.cadence, pR.cadence); }
       else { const d = pL || pR; pw = d.power; cad = d.cadence; if (d.bal != null) left = pw * d.bal / 100; else only = pL ? 'Solo pedal izquierdo' : 'Solo pedal derecho'; }
       rd.ped = { only };
+      // Potencia de los pedales: la del momento (suavizada 1 s). Cadencia y reparto: medias de la sesión.
+      rd.pedP = rd.pedP == null ? pw : rd.pedP + (pw - rd.pedP) * (1 - Math.exp(-h / 1.0));
       if (rd.started && !rd.paused) {
         const A = rd.pedAcc; A.t += h; A.e += pw * h;
         if (cad > 0) { A.ct += h; A.cs += cad * h; }
@@ -438,7 +440,7 @@
     if (rd.ped) {
       ped.hidden = false;
       const A = rd.pedAcc, only = rd.ped.only, bal = only || !(A.te > 0) ? null : (A.le / A.te) * 100, balRow = $('#hBalL').parentElement;
-      $('#hPmW').textContent = A.t > 0 ? Math.round(A.e / A.t) : '—';
+      $('#hPmW').textContent = rd.pedP != null ? Math.round(rd.pedP) : '—';
       $('#hPmC').textContent = A.ct > 0 ? Math.round(A.cs / A.ct) : '—';
       balRow.classList.toggle('only', !!only);
       $('#hBalL').textContent = only ? only : bal == null ? 'I —' : `I ${Math.round(bal)}%`;

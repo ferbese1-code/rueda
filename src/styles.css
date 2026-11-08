@@ -158,7 +158,7 @@ details.others .list { margin-top: 8px; }
 .pwork { position: absolute; top: var(--gt); left: var(--gl); bottom: calc(var(--gb) + 54px); width: var(--pw); padding: 5px 6px; display: flex; flex-direction: column; pointer-events: auto; }
 .wtitle { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .whead { display: flex; align-items: baseline; gap: 6px; }
-.wnum { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.wnum { font-size: 13px; font-weight: 700; color: var(--fg); white-space: nowrap; }
 .wend { font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; align-items: baseline; gap: 6px; white-space: nowrap; }
 .wend b { color: var(--fg); font-size: clamp(24px, 8vmin, 34px); font-weight: 800; line-height: 1.1; }
 /* Lista completa de bloques: se desplaza con el dedo y vuelve sola al bloque actual */
@@ -182,6 +182,8 @@ details.others .list { margin-top: 8px; }
 .pstat i { font-style: normal; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; width: 30px; }
 .bal { display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; margin-top: 2px; }
 .bal.only { justify-content: flex-end; color: var(--muted); font-size: 12px; }
+.bal .balt { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); align-self: center; }
+.bal.only .balt { display: none; }
 .balbar { height: 6px; border-radius: 3px; background: var(--sky); overflow: hidden; }
 .balbar i { display: block; height: 100%; width: 50%; background: var(--amber); transition: width .4s; }
 .waitstart { position: absolute; left: 50%; top: 60%; transform: translate(-50%, -50%); background: var(--plate); border: 1px solid var(--line); border-radius: 14px; padding: 12px 22px; display: flex; flex-direction: column; align-items: center; gap: 2px; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); white-space: nowrap; }
